@@ -1,0 +1,12 @@
+.DS_Store
+*/.DS_Store
+.vscode
+
+bin/*
+out/*
+lib/*
+include/*
+lcptools
+
+.nfs*
+*.o
