@@ -1,11 +1,11 @@
 /**
- * @file    lcp-fasta.cpp
+ * @file    falcp.cpp
  * @brief   Analysis and Processing of Genomic Data
  *
  * This program is designed for in-depth analysis of genomic sequences. It reads
  * genomic data, processes it through multiple levels of analysis (defined by
- * LCP_LEVEL), and computes various statistics such as contiguous counts, distances,
- * and lengths of genomic sequences.
+ * LCP_LEVEL), and computes various statistics such as contiguous counts, distinc
+ * core counts, distances, and lengths of LCP cores in the genomic sequences.
  *
  * The analysis is detailed and involves different stages, including the computation
  * of contiguous regions, distances between certain genomic features, and lengths of
@@ -22,6 +22,7 @@
 #include <fstream>
 #include <iostream>
 #include <vector>
+#include <set>
 
 /**
  * @brief Performs analysis of genomic data at a specified level.
@@ -31,16 +32,23 @@
  * through LCP cores, calculates relevant statistics, and stores them in
  * provided arrays and vectors. It supports analysis at different levels,
  * allowing for multi-layered (LCP level) examination of genomic sequences.
- *
+ * 
+ * @param str Pointer to the genomic string being analyzed.
  * @param level The level of analysis (used in multi-level processing).
  * @param contiguous_counts Array to store counts of contiguous genomic segments.
  * @param distances Multidimensional array to store position-based distances.
  * @param distancesXL Vector to store larger position-based distances.
  * @param lengths Multidimensional array to store lengths of genomic segments.
  * @param lengthsXL Vector to store larger lengths.
- * @param str Pointer to the genomic string being analyzed.
+
  */
-void analyze(int level, int (&contiguous_counts)[LCP_LEVEL], int (&distances)[LCP_LEVEL][DISTANCE_LENGTH], std::vector<std::vector<int>> &distancesXL, int (&lengths)[LCP_LEVEL][DISTANCE_LENGTH], std::vector<std::vector<int>> &lengthsXL, struct lps *str) {
+void analyze(struct lps *str,
+             int level,
+             int (&contiguous_counts)[LCP_LEVEL],
+             int (&distances)[LCP_LEVEL][DISTANCE_LENGTH],
+             std::vector<std::vector<int>> &distancesXL,
+             int (&lengths)[LCP_LEVEL][DISTANCE_LENGTH],
+             std::vector<std::vector<int>> &lengthsXL) {
 
 	if (str->size > 0) {
 
@@ -89,32 +97,48 @@ void analyze(int level, int (&contiguous_counts)[LCP_LEVEL], int (&distances)[LC
  * of LCP (Locally Consistent Parsing) analysis. It tracks the execution time for
  * each level of processing, updates various statistical arrays, and manages LCP core
  * extraction and deepening across specified levels. The function also calculates
- * contiguous counts, distances, and lengths for genomic segments, storing the
- * results in the provided arrays and vectors.
+ * contiguous counts, distinct counts, distances, and lengths for genomic segments, 
+ * storing the results in the provided arrays and vectors.
  *
  * @param sequence The genomic sequence (string) to be analyzed.
- * @param durations A vector storing the durations (in milliseconds) of each level's
- *                  processing time.
+ * @param core_counts An array storing the number of LCP cores found at each level.
  * @param contiguous_counts An array storing the count of contiguous genomic segments
  *                           for each level.
- * @param core_counts An array storing the number of LCP cores found at each level.
+ * @param distinct_cores An array of set storing the distinct LCP cores found at each level.
+ * @param durations A vector storing the durations (in milliseconds) of each level's
+ *                  processing time.
  * @param distances A multidimensional array storing position-based distances between
  *                  genomic segments at each level.
  * @param distancesXL A vector storing larger distances between genomic segments at each level.
  * @param lengths A multidimensional array storing the lengths of genomic segments at each level.
  * @param lengthsXL A vector storing larger lengths of genomic segments at each level.
+ * @param sizes An array storing sizes (bytes) of LCP cores found at each level.
  */
-void process(std::string &sequence, std::vector<std::chrono::milliseconds> &durations, int (&contiguous_counts)[LCP_LEVEL], int (&core_counts)[LCP_LEVEL], int (&distances)[LCP_LEVEL][DISTANCE_LENGTH], std::vector<std::vector<int>> &distancesXL, int (&lengths)[LCP_LEVEL][DISTANCE_LENGTH], std::vector<std::vector<int>> &lengthsXL) {
+void process(std::string &sequence,
+             int (&core_counts)[LCP_LEVEL],
+             int (&contiguous_counts)[LCP_LEVEL],
+             std::set<ulabel> (&distinct_cores)[LCP_LEVEL],
+             std::vector<std::chrono::milliseconds> &durations,
+             int (&distances)[LCP_LEVEL][DISTANCE_LENGTH],
+             std::vector<std::vector<int>> &distancesXL,
+             int (&lengths)[LCP_LEVEL][DISTANCE_LENGTH],
+             std::vector<std::vector<int>> &lengthsXL,
+             double (&sizes)[LCP_LEVEL]) {
 
 	auto start = std::chrono::high_resolution_clock::now();
 	struct lps str;
-    init_lps(&str, sequence.c_str(), sequence.size(), 0);
+    init_lps(&str, sequence.c_str(), sequence.size());
 
 	auto extraction_end = std::chrono::high_resolution_clock::now();
 	durations[0] += std::chrono::milliseconds(std::chrono::duration_cast<std::chrono::milliseconds>(extraction_end - start).count());
 	core_counts[0] += str.size;
+    sizes[0] += lps_memsize(&str);
 	
-	analyze(0, contiguous_counts, distances, distancesXL, lengths, lengthsXL, &str);
+	analyze(&str, 0, contiguous_counts, distances, distancesXL, lengths, lengthsXL);
+
+    for (int index = 0; index < str.size; index++) {
+        distinct_cores[0].insert(str.cores[index].label);
+    }
 
 	for (int i = 1; i < LCP_LEVEL; i++) {
 
@@ -124,8 +148,13 @@ void process(std::string &sequence, std::vector<std::chrono::milliseconds> &dura
 		auto stop_level = std::chrono::high_resolution_clock::now();
 		durations[i] += std::chrono::milliseconds(std::chrono::duration_cast<std::chrono::milliseconds>(stop_level - start_level).count());
 		core_counts[i] += str.size;
+        sizes[i] += lps_memsize(&str);
 
-		analyze(i, contiguous_counts, distances, distancesXL, lengths, lengthsXL, &str);
+		analyze(&str, i, contiguous_counts, distances, distancesXL, lengths, lengthsXL);
+
+        for (int index = 0; index < str.size; index++) {
+            distinct_cores[i].insert(str.cores[index].label);
+        }
 	}
 
 	std::cout << "Length of the processed sequence: " << format_int(sequence.size()) << std::endl;
@@ -137,16 +166,10 @@ void process(std::string &sequence, std::vector<std::chrono::milliseconds> &dura
 /**
  * @brief The entry point of the program.
  *
- * The main function coordinates the entire genomic data analysis process. It
- * initializes necessary data structures, reads input genomic sequences, and
- * calls specific functions to perform analysis at multiple levels. The function
- * also handles file operations, including reading from and writing to files, and
- * ensures proper flow and error handling throughout the execution.
+ * The main function coordinates the entire genomic data analysis process.
  *
  * It performs sequence reading, individual and multi-level analysis, and finally
  * aggregates and summarizes the results before concluding the execution.
- *
- * Usage: <ExecutableName> <InputFile.fasta>
  */
 int main(int argc, char **argv) {
 
@@ -167,13 +190,21 @@ int main(int argc, char **argv) {
 	std::fstream genome;
 	genome.open(argv[1], std::ios::in);
 
+    // section 1
+    int core_counts[LCP_LEVEL] = {0};
 	int contiguous_counts[LCP_LEVEL] = {0};
-	int core_counts[LCP_LEVEL] = {0};
-	int distances[LCP_LEVEL][DISTANCE_LENGTH] = {0};
-	std::vector<std::vector<int>> distancesXL(LCP_LEVEL);
+    std::set<ulabel> distinct_cores[LCP_LEVEL];
+    std::vector<std::chrono::milliseconds> durations(LCP_LEVEL);
+	// section 2
+    int distances[LCP_LEVEL][DISTANCE_LENGTH] = {0};
+    std::vector<std::vector<int>> distancesXL(LCP_LEVEL);
+	// section 3
 	int lengths[LCP_LEVEL][DISTANCE_LENGTH] = {0};
 	std::vector<std::vector<int>> lengthsXL(LCP_LEVEL);
-	std::vector<std::chrono::milliseconds> durations(LCP_LEVEL);
+    // section 4
+    double sizes[LCP_LEVEL] = {0, 0, 0, 0, 0, 0, 0, 0};
+    
+    // other
 	size_t genome_size = 0;
 
 	// read file
@@ -183,7 +214,7 @@ int main(int argc, char **argv) {
 		sequence.reserve(250000000);
 
 		// initializing coefficients of the alphabet and hash tables
-		LCP_INIT(0);
+		LCP_INIT();
 
 		std::cout << "Program begins" << std::endl;
 
@@ -194,7 +225,7 @@ int main(int argc, char **argv) {
 				// process previous chromosome before moving into new one
 				if (sequence.size() != 0) {
 					genome_size += sequence.size();
-					process(sequence, durations, contiguous_counts, core_counts, distances, distancesXL, lengths, lengthsXL);
+					process(sequence, core_counts, contiguous_counts, distinct_cores, durations, distances, distancesXL, lengths, lengthsXL, sizes);
 				}
 
 				id = line.substr(1);
@@ -208,7 +239,7 @@ int main(int argc, char **argv) {
 
 		if (sequence.size() != 0) {
 			genome_size += sequence.size();
-			process(sequence, durations, contiguous_counts, core_counts, distances, distancesXL, lengths, lengthsXL);
+			process(sequence, core_counts, contiguous_counts, distinct_cores, durations, distances, distancesXL, lengths, lengthsXL, sizes);
 		}
 
 		genome.close();
@@ -224,53 +255,63 @@ int main(int argc, char **argv) {
 	std::cout << std::endl;
 
 	// Total Cores
-	std::cout << "Total Cores";
+	std::cout << "Total \\# Cores";
 	for (int i = 0; i < LCP_LEVEL; i++) {
 		std::cout << sep << format_int(core_counts[i]);
 	}
-	std::cout << std::endl;
+	std::cout << " \\\\" << std::endl;
 
 	// Contiguous Cores
 	std::cout << "Contiguous Cores";
 	for (int i = 0; i < LCP_LEVEL; i++) {
 		std::cout << sep << format_int(contiguous_counts[i]);
 	}
-	std::cout << std::endl;
+	std::cout << " \\\\" << std::endl;
+
+	// Distinct Cores
+    std::cout << "Unique Cores";
+    for (int i = 0; i < LCP_LEVEL; i++) {
+        std::cout << sep << format_int(distinct_cores[i].size());
+    }
+    std::cout << " \\\\" << std::endl;
 
 	// Execution Time
-	std::cout << "Exec. Time (sec) (Hash)";
+	std::cout << "Exec. Time (sec)";
 	for (int i = 0; i < LCP_LEVEL; i++) {
 		std::cout << sep << format_double(((double)durations[i].count()) / 1000);
 	}
-	std::cout << std::endl;
+	std::cout << " \\\\" << std::endl;
+    std::cout << "\\midrule" << std::endl;
 
 	// Mean Core Distances
 	std::cout << "Avg. Dist.";
 	for (int i = 0; i < LCP_LEVEL; i++) {
 		std::cout << sep << format_double(mean(distances[i], distancesXL[i]));
 	}
-	std::cout << std::endl;
+	std::cout << " \\\\" << std::endl;
 
 	// Std Dev of Distances
 	std::cout << "StdDev Dist.";
 	for (int i = 0; i < LCP_LEVEL; i++) {
 		std::cout << sep << format_double(stdev(distances[i], distancesXL[i]));
 	}
-	std::cout << std::endl;
+	std::cout << " \\\\" << std::endl;
+    std::cout << "\\midrule" << std::endl;
 
 	// Mean Core Length
 	std::cout << "Avg. Len.";
 	for (int i = 0; i < LCP_LEVEL; i++) {
 		std::cout << sep << format_double(mean(lengths[i], lengthsXL[i]));
 	}
-	std::cout << std::endl;
+	std::cout << " \\\\" << std::endl;
 
 	// Std Dev of Lengths
 	std::cout << "StdDev Len.";
 	for (int i = 0; i < LCP_LEVEL; i++) {
 		std::cout << sep << format_double(stdev(lengths[i], lengthsXL[i]));
 	}
-	std::cout << std::endl;
+	std::cout << " \\\\" << std::endl;
+    std::cout << "\\midrule" << std::endl;
 
 	// Decrease in Total Counts
 	previous = genome_size;
@@ -279,7 +320,7 @@ int main(int argc, char **argv) {
 		std::cout << sep << format_double(static_cast<double>(core_counts[i]) / previous);
 		previous = static_cast<double>(core_counts[i]);
 	}
-	std::cout << std::endl;
+	std::cout << " \\\\" << std::endl;
 
 	// Increase in Mean Lengths
 	previous = 1;
@@ -289,7 +330,7 @@ int main(int argc, char **argv) {
 		std::cout << sep << format_double(current / previous);
 		previous = current;
 	}
-	std::cout << std::endl;
+	std::cout << " \\\\" << std::endl;
 
 	// Increase in Mean Distances
 	previous = 1;
@@ -299,7 +340,16 @@ int main(int argc, char **argv) {
 		std::cout << sep << format_double(current / previous);
 		previous = current;
 	}
-	std::cout << std::endl;
+	std::cout << " \\\\" << std::endl;
+    std::cout << "\\midrule" << std::endl;
+
+	// Total Sizes
+	std::cout << "Total Size (GB)*";
+	for (int i = 0; i < LCP_LEVEL; i++) {
+		std::cout << sep << format_double(sizes[i] / (1024.0 * 1024.0 * 1024.0));
+	}
+	std::cout << " \\\\" << std::endl;
+    std::cout << "\\bottomrule" << std::endl << std::endl;
 
 	return 0;
 };

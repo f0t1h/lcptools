@@ -1,9 +1,11 @@
 # `LCP` (Locally Consistent Parsing) Algorithm Implementation <br>
-![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/akmami/lcptools)
-![GitHub last commit](https://img.shields.io/github/last-commit/akmami/lcptools)
-![GitHub](https://img.shields.io/github/license/akmami/lcptools)
+![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/BilkentCompGen/lcptools)
+![GitHub last commit](https://img.shields.io/github/last-commit/BilkentCompGen/lcptools)
+![GitHub](https://img.shields.io/github/license/BilkentCompGen/lcptools)
 
 This repository contains an implementation of the Locally Consistent Parsing (LCP) algorithm, applied to strings using a specific binary alphabet encoding. The implementation is in C and is designed for efficient computation of LCP on large datasets.
+
+For additional details about the data structure, please refer to [this document](https://github.com/BilkentCompGen/lcptools/blob/main/docs.md).
 
 ## Features
 
@@ -98,10 +100,18 @@ The binary encoding of the alphabet is defined as follows. This default encoding
 
 ### Initialization
 
-To initialize the encodings, use the following function call at the beginning of your program. A integer parameter `verbose` can be provided, which, when set to `1`, prints a summary of the encoding:
+To initialize the encodings, use the following function call at the beginning of your program.
 
 ```cpp
-LCP_INIT(verbose);
+LCP_INIT();
+```
+
+In the above code, defaults the verbose to `0`.
+
+A integer parameter `verbose` can be provided, which, when set to `1`, prints a summary of the encoding:
+
+```cpp
+LCP_INIT2(verbose);
 ```
 
 To display the encoding summary separately, use:
@@ -109,8 +119,6 @@ To display the encoding summary separately, use:
 ```cpp
 LCP_SUMMARY();
 ```
-
-In the above code, `verbose` is an optional integer parameter, defaulting to `0`.
 
 ## Usage Example
 
@@ -122,14 +130,14 @@ Below is an example demonstrating the usage of the LCP algorithm implementation:
 int main() {
 
     // Initialize alphabet coefficients
-    LCP_INIT(0);
+    LCP_INIT();
 
     // Example string
     const char *str = "GGGACCTGGTGACCCCAGCCCACGACAGCCAAGCGCCAGCTGAGCTCAGGTGTGAGGAGATCACAGTCCT";
 
     // Create LCP string object
     struct lps lcp_str;
-    init_lps(&lcp_str, str, strlen(str), 0);
+    init_lps(&lcp_str, str, strlen(str));
 
     // Deepen the LCP analysis
     int isSuccess = lps_deepen(&lcp_str, 2);
@@ -168,56 +176,17 @@ Processes the input string and identifies cores that adhere to specific rules:
     
     Ex: $w = xyza_0 . . . a_nklm$, where $n \geq 1$ and $xyz$ and $klm$ are identified as cores, and $z \lt a_0 \lt \dots \lt a_n \lt k$ or $z \gt a_0 \gt \dots \gt a_n \gt k$.
 
+### Deterministic Coin Tossing:
 
-### Compress Function:
+The dct function in the LCP algorithm is crucial for processing binary sequences. It starts by pinpointing the initial point of difference between two binary strings, beginning from the right-end. The function then assesses the difference based on the position and value of the divergent bit. This detail is transformed into a new binary sequence, which establishes the foundation of a newly generated 'core'. This core is a clear representation of the differences between the original sequences, integral to the algorithm's deepening process. Essentially, the dct function effectively consolidates and encapsulates the information, ensuring efficient further analysis within the LCP framework.
 
-The compress function in the LCP algorithm is crucial for processing binary sequences. It starts by pinpointing the initial point of difference between two binary strings, beginning from the right-end. The function then assesses the difference based on the position and value of the divergent bit. This detail is transformed into a new binary sequence, which establishes the foundation of a newly generated 'core'. This core is a clear representation of the differences between the original sequences, integral to the algorithm's deepening process. Essentially, the compress function effectively consolidates and encapsulates the information, ensuring efficient further analysis within the LCP framework.
-
-```
-PROGRAM compress(bits1, bits2):
-	
-	position <- FIND FIRST DIFFERENCE BETWEEN bits1 AND bits2 STARTING FROM RIGHT
-	difference <- GET BIT FROM THE bits2 AT POSITION (bits2.length - position)
-	new_bits <- position * 2 + difference
-
-	new_core = CREATE NEW CORE FROM new_bits
-
-	return new_core
-```
-
-Ex: 11101**0**00 vs 00010**1**00 -> **100**0 as the position is **2 (100)** and the bit is **0**. Position index start from 0.
+Ex: 11101**0**00 vs 00010**1**00 -> **10**0 as the position is **2 (10)** and the bit is **0**. Position index start from 0.
 
 ### Deepen Function:
 
-The deepen function in the LCP algorithm primarily focuses on the compression of 'cores' alongside their left neighbors. The purpose of this repeated compression is to manage the length of the cores, preventing them from becoming large. After a few rounds of compression, the LCP algorithm is re-applied. This re-application aims to identify new cores within the compressed data. In this context, each compressed core is treated as a discrete value, represented in binary form. This representation facilitates efficient processing and analysis within the algorithm.
+The deepen function in the LCP algorithm primarily focuses on the compression of 'cores' alongside their left neighbors. The purpose of this repeated compression (dct) is to manage the length of the cores, preventing them from becoming large. After a compression, the LCP algorithm is re-applied. This re-application aims to identify new cores within the compressed data. In this context, each compressed core is treated as a discrete value, represented in binary form. This representation facilitates efficient processing and analysis within the algorithm.
 
 This function iteratively compresses and processes cores to find new cores in compliance with the rules stated above.
-
-```
-PROGRAM deepen(core_length=5, verbose=false):
-	
-	iteration_index <- 0
-
-	FOR iteration_index < DCT_ITERATION_COUNT:
-		iteration_index++
-	 	temp_prev <- cores[0]
-	 
-		FOR index in range(1, cores.length):
-			temp_curr <- cores[index]
-			cores[index] <- compress(temp_prev, temp_curr)
-			temp_prev <- temp_curr
-		ENDFOR
-
-		cores.pop_front() // it is not compressed since it has no left neighbour
-	ENDFOR
-	
-	RUN LCP ALGORITHM FOR COMPRESSED CORES TO FIND NEW CORES
-	CONCATENATE NEW CORES THAT COMPLY WITH EITHER ONE OF THE RULE DISCUSSED IN THE PREVIOUS SECTION
-
-	level += 1
-```
-
-The deepen function in the LCP algorithm primarily focuses on the compression of 'cores' alongside their left neighbors. The purpose of this repeated compression is to manage the length of the cores, preventing them from becoming unwieldy with each iteration of deepening. After a few rounds of compression, the LCP algorithm is reapplied. This reapplication aims to identify new cores within the compressed data. In this context, each compressed core is treated as a discrete value, represented in binary form. This representation facilitates efficient processing and analysis within the algorithm.
 
 ## Default Variables
 

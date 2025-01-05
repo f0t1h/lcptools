@@ -2,8 +2,8 @@
 
 void reverse(const char *str, int len, char **rev) {
     *rev = (char*) malloc(len*sizeof(char));
-    size_t left = 0;
-    size_t right = len - 1;
+    int left = 0;
+    int right = len - 1;
 
     while (left < right) {
         (*rev)[left] = str[right];
@@ -15,32 +15,179 @@ void reverse(const char *str, int len, char **rev) {
     if (left == right) {
         (*rev)[left] = str[left];
     }
-};
+}
 
-void init_lps(struct lps *nlps, const char *str, int len, int rev_comp) {   
-    nlps->level = 1;
-    nlps->size = 0;
-    nlps->cores = (struct core *)malloc((len/CONSTANT_FACTOR)*sizeof(struct core));
+void init_lps(struct lps *lps_ptr, const char *str, int len) {   
+    lps_ptr->level = 1;
+    lps_ptr->size = 0;
+    lps_ptr->cores = (struct core *)malloc((len/CONSTANT_FACTOR)*sizeof(struct core));
+    lps_ptr->size = parse1(str, str+len, lps_ptr->cores, 0);
+}
 
-    if (!rev_comp) {
-        nlps->size = parse1(str, str+len, nlps->cores);
-    } else {
-        char *rev = NULL;
-        reverse(str, len, &rev);
-        nlps->size = parse2(rev, rev+len, nlps->cores);
-        free(rev);
+void init_lps_offset(struct lps *lps_ptr, const char *str, int len, uint64_t offset) {   
+    lps_ptr->level = 1;
+    lps_ptr->size = 0;
+    lps_ptr->cores = (struct core *)malloc((len/CONSTANT_FACTOR)*sizeof(struct core));
+    lps_ptr->size = parse1(str, str+len, lps_ptr->cores, offset);
+}
+
+void init_lps2(struct lps *lps_ptr, const char *str, int len) {   
+    lps_ptr->level = 1;
+    lps_ptr->size = 0;
+    lps_ptr->cores = (struct core *)malloc((len/CONSTANT_FACTOR)*sizeof(struct core));
+    char *rev = NULL;
+    reverse(str, len, &rev);
+    lps_ptr->size = parse2(rev, rev+len, lps_ptr->cores, 0);
+    free(rev);
+}
+
+void init_lps3(struct lps *lps_ptr, FILE *in) {
+    // read the level from the binary file
+    if (fread(&(lps_ptr->level), sizeof(int), 1, in) != 1) {
+        fprintf(stderr, "Error reading level from file\n");
+        exit(EXIT_FAILURE);
     }
-};
 
-void free_lps(struct lps *nlps) {
-    for(int i=0; i<nlps->size; i++) {
-        free(nlps->cores[i].bit_rep);
+    // read the size (number of cores)
+    if(fread(&(lps_ptr->size), sizeof(int), 1, in) != 1) {
+        fprintf(stderr, "Error reading size from file\n");
+        exit(EXIT_FAILURE);
     }
-    free(nlps->cores);
-    nlps->size = 0;
-};
 
-int parse1(const char *begin, const char *end, struct core *cores) {
+    lps_ptr->cores = NULL;
+
+    if (lps_ptr->size) {
+        // allocate memory for the cores array
+        lps_ptr->cores = (struct core *)malloc(lps_ptr->size * sizeof(struct core));
+
+        // read each core object from the file
+        for (int i = 0; i < lps_ptr->size; i++) {
+            struct core *cr = &(lps_ptr->cores[i]);
+
+            if (fread(&(cr->bit_size), sizeof(ubit_size), 1, in) != 1) {
+                fprintf(stderr, "Error reading bit_size from file at %d\n", i);
+                exit(EXIT_FAILURE);
+            }
+    
+            ubit_size block_number = (cr->bit_size + UBLOCK_BIT_SIZE - 1) / UBLOCK_BIT_SIZE;
+            cr->bit_rep = (ublock *)malloc(block_number * sizeof(ublock));
+            if (fread(cr->bit_rep, block_number * sizeof(ublock), 1, in) != 1) {
+                fprintf(stderr, "Error reading bit_rep from file at %d\n", i);
+                exit(EXIT_FAILURE);
+            }
+         
+            if (fread(&(cr->label), sizeof(ulabel), 1, in) != 1) {
+                fprintf(stderr, "Error reading label from file at %d\n", i);
+                exit(EXIT_FAILURE);
+            }
+            if (fread(&(cr->start), sizeof(uint64_t), 1, in) != 1) {
+                fprintf(stderr, "Error reading start from file at %d\n", i);
+                exit(EXIT_FAILURE);
+            }
+            if (fread(&(cr->end), sizeof(uint64_t), 1, in) != 1) {
+                fprintf(stderr, "Error reading end from file at %d\n", i);
+                exit(EXIT_FAILURE);
+            }
+        }
+    }
+}
+
+void init_lps4(struct lps *lps_ptr, const char *str, int len, int lcp_level, int chunk_size) {
+
+    if (lcp_level < 1)
+        return;
+
+    lps_ptr->level = 1;
+    lps_ptr->size = 0; 
+    int estimated_size = (int)(len / pow( (double)CONSTANT_FACTOR, lcp_level));
+    lps_ptr->cores = (struct core *)malloc(estimated_size*sizeof(struct core));
+
+    int index = 0, core_index = 0, proceed = 1;
+
+    {
+        int str_len = minimum(chunk_size, len-index);
+        struct lps temp_lps;
+        init_lps_offset(&temp_lps, str+index, str_len, index);
+        lps_deepen(&temp_lps, lcp_level);
+        
+        if (temp_lps.size>1) {
+            memcpy(lps_ptr->cores+core_index, temp_lps.cores, temp_lps.size*sizeof(struct core));
+            core_index += temp_lps.size;
+            lps_ptr->size += temp_lps.size;
+            index = lps_ptr->cores[core_index-3].start+1;
+        }
+        free(temp_lps.cores);
+        proceed = (str_len == chunk_size);
+    }
+
+    while (index < len && proceed) {
+        int str_len = minimum(chunk_size, len-index);
+        struct lps temp_lps;
+        init_lps_offset(&temp_lps, str+index, str_len, index);
+        lps_deepen(&temp_lps, lcp_level);
+        
+        if (temp_lps.size>1) {
+            int overlap = 0;
+            for (; overlap<temp_lps.size; overlap++) {
+                if (temp_lps.cores[overlap].start == lps_ptr->cores[core_index-1].start) {
+                    for(int i=0; i<=overlap; i++) {
+                        free_core(&(temp_lps.cores[i]));
+                    }
+                    memcpy(lps_ptr->cores+core_index, temp_lps.cores+overlap+1, (temp_lps.size-overlap-1)*sizeof(struct core));
+                    core_index += (temp_lps.size-overlap-1);
+                    lps_ptr->size += (temp_lps.size-overlap-1);
+                    index = lps_ptr->cores[core_index-3].start+1;
+                    break;
+                }
+            }
+            if (overlap==temp_lps.size) {
+                memcpy(lps_ptr->cores+core_index, temp_lps.cores, temp_lps.size*sizeof(struct core));
+                core_index += temp_lps.size;
+                lps_ptr->size += temp_lps.size;
+                index = lps_ptr->cores[core_index-3].start+1;
+            }
+        }
+        free(temp_lps.cores);
+        proceed = (str_len == chunk_size);
+    }
+
+    if (lps_ptr->size)
+        lps_ptr->cores = (struct core*)realloc(lps_ptr->cores, lps_ptr->size * sizeof(struct core));
+}
+
+void free_lps(struct lps *lps_ptr) {
+    for(int i=0; i<lps_ptr->size; i++) {
+        free(lps_ptr->cores[i].bit_rep);
+    }
+    free(lps_ptr->cores);
+    lps_ptr->size = 0;
+}
+
+void write_lps(struct lps *lps_ptr, FILE *out) {
+    // write the level field
+    fwrite(&(lps_ptr->level), sizeof(int), 1, out);
+
+    // write the size (number of cores)
+    fwrite(&(lps_ptr->size), sizeof(int), 1, out);
+
+    // write each core object iteratively
+    if (lps_ptr->size) {
+        for (int i = 0; i < lps_ptr->size; i++) {
+            const struct core *cr = &(lps_ptr->cores[i]);
+
+            fwrite(&(cr->bit_size), sizeof(ubit_size), 1, out);
+            
+            ubit_size block_number = (cr->bit_size + UBLOCK_BIT_SIZE - 1) / UBLOCK_BIT_SIZE;
+            fwrite(cr->bit_rep, sizeof(ublock), block_number, out);
+            
+            fwrite(&(cr->label), sizeof(ulabel), 1, out);
+            fwrite(&(cr->start), sizeof(uint64_t), 1, out);
+            fwrite(&(cr->end), sizeof(uint64_t), 1, out);
+        }
+    }
+}
+
+int parse1(const char *begin, const char *end, struct core *cores, uint64_t offset) {
 
     const char *it1 = begin;
     const char *it2 = end;
@@ -67,13 +214,13 @@ int parse1(const char *begin, const char *end, struct core *cores) {
             if (temp != end) {
                 // check if there is any SSEQ cores left behind
                 if (it2 < it1) {
-                    init_core1(&(cores[core_index]), it2-1, it1-it2+2, it2-begin-1, it1-begin+1);
+                    init_core1(&(cores[core_index]), it2-1, it1-it2+2, it2-begin-1+offset, it1-begin+1+offset);
                     core_index++;
                 }
 
                 // create RINT core
                 it2 = it1 + 2 + middle_count;
-                init_core1(&(cores[core_index]), it1, it2-it1, it1-begin, it2-begin);
+                init_core1(&(cores[core_index]), it1, it2-it1, it1-begin+offset, it2-begin+offset);
                 core_index++;
 
                 continue;
@@ -85,13 +232,13 @@ int parse1(const char *begin, const char *end, struct core *cores) {
 
             // check if there is any SSEQ cores left behind
             if (it2 < it1) {
-                init_core1(&(cores[core_index]), it2-1, it1-it2+2, it2-begin-1, it1-begin+1);
+                init_core1(&(cores[core_index]), it2-1, it1-it2+2, it2-begin-1+offset, it1-begin+1+offset);
                 core_index++;
             }
 
             // create LMIN core
             it2 = it1 + 3;
-            init_core1(&(cores[core_index]), it1, it2-it1, it1-begin, it2-begin);
+            init_core1(&(cores[core_index]), it1, it2-it1, it1-begin+offset, it2-begin+offset);
             core_index++;
 
             continue;
@@ -110,13 +257,13 @@ int parse1(const char *begin, const char *end, struct core *cores) {
 
             // check if there is any SSEQ cores left behind
             if (it2 < it1) {
-                init_core1(&(cores[core_index]), it2-1, it1-it2+2, it2-begin-1, it1-begin+1);
+                init_core1(&(cores[core_index]), it2-1, it1-it2+2, it2-begin-1+offset, it1-begin+1+offset);
                 core_index++;
             }
 
             // create LMAX core
             it2 = it1 + 3;
-            init_core1(&(cores[core_index]), it1, it2-it1, it1-begin, it2-begin);
+            init_core1(&(cores[core_index]), it1, it2-it1, it1-begin+offset, it2-begin+offset);
             core_index++;
 
             continue;
@@ -124,9 +271,9 @@ int parse1(const char *begin, const char *end, struct core *cores) {
     }
 
     return core_index;
-};
+}
 
-int parse2(const char *begin, const char *end, struct core *cores) {
+int parse2(const char *begin, const char *end, struct core *cores, uint64_t offset) {
 
     const char *it1 = begin;
     const char *it2 = end;
@@ -153,13 +300,13 @@ int parse2(const char *begin, const char *end, struct core *cores) {
             if (temp != end) {
                 // check if there is any SSEQ cores left behind
                 if (it2 < it1) {
-                    init_core2(&(cores[core_index]), it2-1, it1-it2+2, it2-begin-1, it1-begin+1);
+                    init_core2(&(cores[core_index]), it2-1, it1-it2+2, it2-begin-1+offset, it1-begin+1+offset);
                     core_index++;
                 }
 
                 // create RINT core
                 it2 = it1 + 2 + middle_count;
-                init_core2(&(cores[core_index]), it1, it2-it1, it1-begin, it2-begin);
+                init_core2(&(cores[core_index]), it1, it2-it1, it1-begin+offset, it2-begin+offset);
                 core_index++;
 
                 continue;
@@ -171,13 +318,13 @@ int parse2(const char *begin, const char *end, struct core *cores) {
 
             // check if there is any SSEQ cores left behind
             if (it2 < it1) {
-                init_core2(&(cores[core_index]), it2-1, it1-it2+2, it2-begin-1, it1-begin+1);
+                init_core2(&(cores[core_index]), it2-1, it1-it2+2, it2-begin-1+offset, it1-begin+1+offset);
                 core_index++;
             }
 
             // create LMIN core
             it2 = it1 + 3;
-            init_core2(&(cores[core_index]), it1, it2-it1, it1-begin, it2-begin);
+            init_core2(&(cores[core_index]), it1, it2-it1, it1-begin+offset, it2-begin+offset);
             core_index++;
 
             continue;
@@ -196,13 +343,13 @@ int parse2(const char *begin, const char *end, struct core *cores) {
 
             // check if there is any SSEQ cores left behind
             if (it2 < it1) {
-                init_core2(&(cores[core_index]), it2-1, it1-it2+2, it2-begin-1, it1-begin+1);
+                init_core2(&(cores[core_index]), it2-1, it1-it2+2, it2-begin-1+offset, it1-begin+1+offset);
                 core_index++;
             }
 
             // create LMAX core
             it2 = it1 + 3;
-            init_core2(&(cores[core_index]), it1, it2-it1, it1-begin, it2-begin);
+            init_core2(&(cores[core_index]), it1, it2-it1, it1-begin+offset, it2-begin+offset);
             core_index++;
 
             continue;
@@ -210,11 +357,11 @@ int parse2(const char *begin, const char *end, struct core *cores) {
     }
 
     return core_index;
-};
+}
 
 int parse3(struct core *begin, struct core *end, struct core *cores) {
 
-    struct core *it1 = begin + DCT_ITERATION_COUNT;
+    struct core *it1 = begin;
     struct core *it2 = end;
     int core_index = 0;
 
@@ -239,13 +386,13 @@ int parse3(struct core *begin, struct core *end, struct core *cores) {
             if (temp != end) {
                 // check if there is any SSEQ cores left behind
                 if (it2 < it1) {
-                    init_core3(&(cores[core_index]), it2-1-DCT_ITERATION_COUNT, it1-it2+2+DCT_ITERATION_COUNT);
+                    init_core3(&(cores[core_index]), it2-1, it1-it2+2);
                     core_index++;
                 }
 
                 // create RINT core
                 it2 = it1 + 2 + middle_count;
-                init_core3(&(cores[core_index]), it1-DCT_ITERATION_COUNT, it2-it1+DCT_ITERATION_COUNT);
+                init_core3(&(cores[core_index]), it1, it2-it1);
                 core_index++;
 
                 continue;
@@ -257,13 +404,13 @@ int parse3(struct core *begin, struct core *end, struct core *cores) {
             
             // check if there is any SSEQ cores left behind
             if (it2 < it1) {
-                init_core3(&(cores[core_index]), it2-1-DCT_ITERATION_COUNT, it1-it2+2+DCT_ITERATION_COUNT);
+                init_core3(&(cores[core_index]), it2-1, it1-it2+2);
                 core_index++;
             }
 
             // create LMIN core
             it2 = it1 + 3;
-            init_core3(&(cores[core_index]), it1-DCT_ITERATION_COUNT, it2-it1+DCT_ITERATION_COUNT);
+            init_core3(&(cores[core_index]), it1, it2-it1);
             core_index++;
 
             continue;
@@ -282,30 +429,30 @@ int parse3(struct core *begin, struct core *end, struct core *cores) {
 
             // check if there is any SSEQ cores left behind
             if (it2 < it1) {
-                init_core3(&(cores[core_index]), it2-1-DCT_ITERATION_COUNT, it1-it2+2+DCT_ITERATION_COUNT);
+                init_core3(&(cores[core_index]), it2-1, it1-it2+2);
                 core_index++;
             }
 
             // create LMAX core
             it2 = it1 + 3;
-            init_core3(&(cores[core_index]), it1-DCT_ITERATION_COUNT, it2-it1+DCT_ITERATION_COUNT);
+            init_core3(&(cores[core_index]), it1, it2-it1);
             core_index++;
 
             continue;
         }
     }
     return core_index;
-};
+}
 
-int64_t lps_memsize(const struct lps *str) {
+int64_t lps_memsize(const struct lps *lps_ptr) {
     uint64_t total = sizeof(struct lps);
     
-    for(int i=0; i<str->size; i++) {
-        total += core_memsize(&(str->cores[i]));
+    for(int i=0; i<lps_ptr->size; i++) {
+        total += core_memsize(&(lps_ptr->cores[i]));
     }
 
     return total;
-};
+}
 
 /**
  * @brief Performs Deterministic Coin Tossing (DCT) compression on binary sequences.
@@ -320,82 +467,75 @@ int64_t lps_memsize(const struct lps *str) {
  *
  * @return 0 if dct is performed, -1 if no enough cores are available for dct.
  */
-int lcp_dct(struct lps *str) {
+int lcp_dct(struct lps *lps_ptr) {
 
     // at least 2 cores are needed for compression
-    if (str->size < DCT_ITERATION_COUNT + 2) {
+    if (lps_ptr->size < DCT_ITERATION_COUNT + 1) {
         return -1;
     }
 
-    for (size_t dct_index = 0; dct_index < DCT_ITERATION_COUNT; dct_index++) {
-        struct core *it_left = str->cores + str->size - 2, *it_right = str->cores + str->size - 1;
+    for (uint64_t dct_index = 0; dct_index < DCT_ITERATION_COUNT; dct_index++) {
+        struct core *it_left = lps_ptr->cores + lps_ptr->size - 2, *it_right = lps_ptr->cores + lps_ptr->size - 1;
 
-        for (; str->cores + dct_index <= it_left; it_left--, it_right--) {
+        for (; lps_ptr->cores + dct_index <= it_left; it_left--, it_right--) {
             core_compress(it_left, it_right);
         }
     }
 
     return 0;
-};
+}
 
-int lps_deepen1(struct lps *str) {
+int lps_deepen1(struct lps *lps_ptr) {
 
     // compress cores
-    if (lcp_dct(str) < 0) {
+    if (lcp_dct(lps_ptr) < 0) {
+        for(int i=0; i<lps_ptr->size; i++) {
+            free(lps_ptr->cores[i].bit_rep);
+        }
+        lps_ptr->size = 0;
+        lps_ptr->level++;
         return 0;
     }
 
     // find new cores
-    int new_size = parse3(str->cores + DCT_ITERATION_COUNT, str->cores + str->size, str->cores);
+    int new_size = parse3(lps_ptr->cores + DCT_ITERATION_COUNT, lps_ptr->cores + lps_ptr->size, lps_ptr->cores);
     int temp = new_size;
 
     // remove old cores
-    while(temp < str->size) {
-        free(str->cores[temp].bit_rep);
+    while(temp < lps_ptr->size) {
+        free(lps_ptr->cores[temp].bit_rep);
         temp++;
     }
-    str->size = new_size;
+    lps_ptr->size = new_size;
 
-    str->level++;
+    lps_ptr->level++;
+
+    if (lps_ptr->size)
+        lps_ptr->cores = (struct core*)realloc(lps_ptr->cores, lps_ptr->size * sizeof(struct core));
 
     return 1;
-};
+}
 
+int lps_deepen(struct lps *lps_ptr, int lcp_level) {
 
-int lps_deepen(struct lps *str, int lcp_level) {
-
-    if (lcp_level <= str->level)
+    if (lcp_level <= lps_ptr->level)
         return 0;
 
-    while (str->level < lcp_level && lps_deepen1(str))
+    while (lps_ptr->level < lcp_level && lps_deepen1(lps_ptr))
         ;
 
     return 1;
-};
+}
 
-void print_lps(const struct lps *str) {
-    printf("Level: %d \n", str->level);
-    for(int i=0; i<str->size; i++) {
-        print_core(&(str->cores[i]));
+void print_lps(const struct lps *lps_ptr) {
+    printf("Level: %d \n", lps_ptr->level);
+    for(int i=0; i<lps_ptr->size; i++) {
+        print_core(&(lps_ptr->cores[i]));
         printf(" ");
     }
-};
+}
 
 int lps_eq(const struct lps *lhs, const struct lps *rhs) {
-    if (lhs->size != rhs->size) {
-        return 1;
-    }
-
-    for(int i=0; i<lhs->size; i++) {
-        if (core_neq(&(lhs->cores[i]), &(rhs->cores[i])) != 0) {
-            return 1;
-        }
-    }
-
-    return 0;
-};
-
-int lps_neq(const struct lps *lhs, const struct lps *rhs) {
     if (lhs->size != rhs->size) {
         return 0;
     }
@@ -407,4 +547,18 @@ int lps_neq(const struct lps *lhs, const struct lps *rhs) {
     }
 
     return 1;
-};
+}
+
+int lps_neq(const struct lps *lhs, const struct lps *rhs) {
+    if (lhs->size != rhs->size) {
+        return 1;
+    }
+
+    for(int i=0; i<lhs->size; i++) {
+        if (core_neq(&(lhs->cores[i]), &(rhs->cores[i])) != 0) {
+            return 1;
+        }
+    }
+
+    return 0;
+}
