@@ -30,7 +30,6 @@ LIB_DIR = $(ABS_PREFIX)/lib
 .PHONY: all clean install uninstall test
 
 install: clean $(STATIC) $(DYNAMIC) lcptools
-
 	mkdir -p $(INCLUDE_DIR)
 	rm -f *.o
 	cp $(HDR) $(INCLUDE_DIR)
@@ -69,7 +68,7 @@ clean:
 
 # target for static library
 $(STATIC): $(OBJ_STATIC)
-	$(AR) $(ARFLAGS) $@ $^ -lm
+	$(AR) $(ARFLAGS) $@ $^
 	rm -f $(OBJ_STATIC)
 	mkdir -p $(LIB_DIR)
 	@mv $@ $(LIB_DIR) || \
