@@ -192,3 +192,22 @@ This function iteratively compresses and processes cores to find new cores in co
 
 The default iteration count for compression in each deepening is set to 1.
 
+
+## Header only usage
+
+Once in the code base do
+```
+#define LCPTOOLS_IMPL
+#include <lcptools_ho.h>
+```
+
+Afterwards it can be regularly included in other files
+
+
+## For development
+
+Register the hooks after cloning to autogenerate header only version
+
+```
+git config --local core.hooksPath .githooks/
+```
