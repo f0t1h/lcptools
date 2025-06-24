@@ -15,7 +15,7 @@ int rc_alphabet[128];
 char characters[128];
 int alphabet_bit_size;
 
-void LCP_SUMMARY() {
+void LCP_SUMMARY(void) {
     printf("# Alphabet encoding summary\n");
     printf("# Coefficients: ");
     for (int i = 0; i < 128; i++) {
@@ -27,7 +27,7 @@ void LCP_SUMMARY() {
     printf("# Alphabet bit size: %d", alphabet_bit_size);
 }
 
-void LCP_INIT() {
+void LCP_INIT(void) {
     LCP_INIT2(0);
 }
 
