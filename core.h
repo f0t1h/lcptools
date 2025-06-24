@@ -41,7 +41,7 @@ extern "C" {
 #endif
 
 #include "encoding.h"
-#include "string.h"
+#include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h> 
