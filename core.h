@@ -61,6 +61,21 @@ struct core {
     uint64_t end;
 };
 
+
+/**
+ * @brief Computes the 32-bit MurmurHash3 hash for a given key.
+ *
+ * This function computes a 32-bit hash of the input data 'key' with the
+ * specified length 'len' and an optional seed value. It processes the
+ * input in blocks and handles any remaining bytes.
+ *
+ * @param key Pointer to the data to be hashed.
+ * @param len The length of the data in bytes.
+ * @param seed An initial seed value for the hash computation.
+ * @return The resulting 32-bit hash value.
+ */
+uint32_t MurmurHash3_32(const void *key, int len, uint32_t seed) ;
+
 /**
  * @brief Initializes a core structure with the provided string data and index range.
  * 
