@@ -107,8 +107,8 @@ void init_core2(struct core *cr, const char *begin, uint64_t distance, uint64_t 
     cr->label = 0;
     cr->label |= ((distance-2) << 6);
     cr->label |= (rc_alphabet[(int)(*(begin))] << 4);
-    cr->label |= (rc_alphabet[(int)(*(begin+distance-2))] << 2);
-    cr->label |= (rc_alphabet[(int)(*(begin+distance-1))]);
+    cr->label |= (rc_alphabet[(int)(*(begin-distance+2))] << 2);
+    cr->label |= (rc_alphabet[(int)(*(begin-distance+1))]);
     cr->bit_rep = 0x8000000000000000 | cr->label;
     cr->bit_size = 2 * distance;
 }
