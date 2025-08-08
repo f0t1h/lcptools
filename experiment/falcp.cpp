@@ -284,14 +284,14 @@ int main(int argc, char **argv) {
     std::cout << "\\midrule" << std::endl;
 
 	// Mean Core Distances
-	std::cout << "Avg. Dist.";
+	std::cout << "Avg Distance";
 	for (int i = 0; i < LCP_LEVEL; i++) {
 		std::cout << sep << format_double(mean(distances[i], distancesXL[i]));
 	}
 	std::cout << " \\\\" << std::endl;
 
 	// Std Dev of Distances
-	std::cout << "StdDev Dist.";
+	std::cout << "StdDev Distance";
 	for (int i = 0; i < LCP_LEVEL; i++) {
 		std::cout << sep << format_double(stdev(distances[i], distancesXL[i]));
 	}
@@ -299,14 +299,14 @@ int main(int argc, char **argv) {
     std::cout << "\\midrule" << std::endl;
 
 	// Mean Core Length
-	std::cout << "Avg. Len.";
+	std::cout << "Avg Length";
 	for (int i = 0; i < LCP_LEVEL; i++) {
 		std::cout << sep << format_double(mean(lengths[i], lengthsXL[i]));
 	}
 	std::cout << " \\\\" << std::endl;
 
 	// Std Dev of Lengths
-	std::cout << "StdDev Len.";
+	std::cout << "StdDev Length";
 	for (int i = 0; i < LCP_LEVEL; i++) {
 		std::cout << sep << format_double(stdev(lengths[i], lengthsXL[i]));
 	}
@@ -315,7 +315,7 @@ int main(int argc, char **argv) {
 
 	// Decrease in Total Counts
 	previous = genome_size;
-	std::cout << "Decr. Core Cnt.";
+	std::cout << "Decrease in Core Count";
 	for (int i = 0; i < LCP_LEVEL; i++) {
 		std::cout << sep << format_double(static_cast<double>(core_counts[i]) / previous);
 		previous = static_cast<double>(core_counts[i]);
@@ -324,7 +324,7 @@ int main(int argc, char **argv) {
 
 	// Increase in Mean Lengths
 	previous = 1;
-	std::cout << "Incr. Avg. Len.";
+	std::cout << "Increase in Avg Length";
 	for (int i = 0; i < LCP_LEVEL; i++) {
 		current = mean(lengths[i], lengthsXL[i]);
 		std::cout << sep << format_double(current / previous);
@@ -334,7 +334,7 @@ int main(int argc, char **argv) {
 
 	// Increase in Mean Distances
 	previous = 1;
-	std::cout << "Incr. Avg. Dist.";
+	std::cout << "Increase in Avg Distance";
 	for (int i = 0; i < LCP_LEVEL; i++) {
 		current = mean(distances[i], distancesXL[i]);
 		std::cout << sep << format_double(current / previous);
@@ -344,7 +344,7 @@ int main(int argc, char **argv) {
     std::cout << "\\midrule" << std::endl;
 
 	// Total Sizes
-	std::cout << "Total Size (GB)*";
+	std::cout << "Total Size (GB)";
 	for (int i = 0; i < LCP_LEVEL; i++) {
 		std::cout << sep << format_double(sizes[i] / (1024.0 * 1024.0 * 1024.0));
 	}

@@ -1,22 +1,5 @@
 #include "lps.h"
 
-void reverse(const char *str, int len, char **rev) {
-    *rev = (char*) malloc(len*sizeof(char));
-    int left = 0;
-    int right = len - 1;
-
-    while (left < right) {
-        (*rev)[left] = str[right];
-        (*rev)[right] = str[left];
-
-        left++;
-        right--;
-    }
-    if (left == right) {
-        (*rev)[left] = str[left];
-    }
-}
-
 void init_lps(struct lps *lps_ptr, const char *str, int len) {   
     lps_ptr->level = 1;
     lps_ptr->size = 0;
@@ -35,10 +18,7 @@ void init_lps2(struct lps *lps_ptr, const char *str, int len) {
     lps_ptr->level = 1;
     lps_ptr->size = 0;
     lps_ptr->cores = (struct core *)malloc((len/CONSTANT_FACTOR)*sizeof(struct core));
-    char *rev = NULL;
-    reverse(str, len, &rev);
-    lps_ptr->size = parse2(rev, rev+len, lps_ptr->cores, 0);
-    free(rev);
+    lps_ptr->size = parse2(str, str+len, lps_ptr->cores, 0);
 }
 
 void init_lps3(struct lps *lps_ptr, FILE *in) {
@@ -250,7 +230,7 @@ int parse1(const char *begin, const char *end, struct core *cores, uint64_t offs
 
             // create LMIN core
             it2 = it1 + 3;
-            init_core1(&(cores[core_index]), it1, it2-it1, it1-begin+offset, it2-begin+offset);
+            init_core1(&(cores[core_index]), it1, 3, it1-begin+offset, it2-begin+offset);
             core_index++;
 
             continue;
@@ -275,7 +255,7 @@ int parse1(const char *begin, const char *end, struct core *cores, uint64_t offs
 
             // create LMAX core
             it2 = it1 + 3;
-            init_core1(&(cores[core_index]), it1, it2-it1, it1-begin+offset, it2-begin+offset);
+            init_core1(&(cores[core_index]), it1, 3, it1-begin+offset, it2-begin+offset);
             core_index++;
 
             continue;
@@ -287,56 +267,56 @@ int parse1(const char *begin, const char *end, struct core *cores, uint64_t offs
 
 int parse2(const char *begin, const char *end, struct core *cores, uint64_t offset) {
 
-    const char *it1 = begin;
-    const char *it2 = end;
+    const char *it1 = end - 1;
+    const char *it2 = begin - 1;
     int core_index = 0;
 
     // find lcp cores
-    for (; it1 + 2 < end; it1++) {
+    for (; begin <= it1 - 2; it1--) {
 
         // skip invalid character
-        if (rc_alphabet[(unsigned char)*it1] == rc_alphabet[(unsigned char)*(it1+1)]) {
+        if (rc_alphabet[(unsigned char)*it1] == rc_alphabet[(unsigned char)*(it1-1)]) {
             continue;
         }
 
         // check for RINT core
-        if (rc_alphabet[(unsigned char)*(it1+1)] == rc_alphabet[(unsigned char)*(it1+2)]) {
+        if (rc_alphabet[(unsigned char)*(it1-1)] == rc_alphabet[(unsigned char)*(it1-2)]) {
 
             // count middle characters
             uint32_t middle_count = 1;
-            const char *temp = it1 + 2;
-            while (temp < end && rc_alphabet[(unsigned char)*(temp-1)] == rc_alphabet[(unsigned char)*temp]) {
-                temp++;
+            const char *temp = it1 - 2;
+            while (begin <= temp && rc_alphabet[(unsigned char)*(temp+1)] == rc_alphabet[(unsigned char)*temp]) {
+                temp--;
                 middle_count++;
             }
-            if (temp != end) {
+            if (begin <= temp) {
                 // check if there is any SSEQ cores left behind
-                if (it2 < it1) {
-                    init_core2(&(cores[core_index]), it2-1, it1-it2+2, it2-begin-1+offset, it1-begin+1+offset);
+                if (it1 < it2) {
+                    init_core2(&(cores[core_index]), it2+1, it2-it1+2, end-it2-1+offset, end-it1-1+offset);
                     core_index++;
                 }
 
                 // create RINT core
-                it2 = it1 + 2 + middle_count;
-                init_core2(&(cores[core_index]), it1, it2-it1, it1-begin+offset, it2-begin+offset);
+                it2 = it1 - 2 - middle_count;
+                init_core2(&(cores[core_index]), it1, 2+middle_count, end-it1-1+offset, end-it2-1+offset);
                 core_index++;
 
                 continue;
             }
         }
 
-        if (rc_alphabet[(unsigned char)*it1] > rc_alphabet[(unsigned char)*(it1+1)] &&
-            rc_alphabet[(unsigned char)*(it1+1)] < rc_alphabet[(unsigned char)*(it1+2)]) {
+        if (rc_alphabet[(unsigned char)*it1] > rc_alphabet[(unsigned char)*(it1-1)] &&
+            rc_alphabet[(unsigned char)*(it1-1)] < rc_alphabet[(unsigned char)*(it1-2)]) {
 
             // check if there is any SSEQ cores left behind
-            if (it2 < it1) {
-                init_core2(&(cores[core_index]), it2-1, it1-it2+2, it2-begin-1+offset, it1-begin+1+offset);
+            if (it1 < it2) {
+                init_core2(&(cores[core_index]), it2+1, it2-it1+2, end-it2-1+offset, end-it1-1+offset);
                 core_index++;
             }
 
             // create LMIN core
-            it2 = it1 + 3;
-            init_core2(&(cores[core_index]), it1, it2-it1, it1-begin+offset, it2-begin+offset);
+            it2 = it1 - 3;
+            init_core2(&(cores[core_index]), it1, 3, end-it1-1+offset, end-it2-1+offset);
             core_index++;
 
             continue;
@@ -347,21 +327,21 @@ int parse2(const char *begin, const char *end, struct core *cores, uint64_t offs
         }
 
         // check for LMAX
-        if (it1+3 < end &&
-            rc_alphabet[(unsigned char)*it1] < rc_alphabet[(unsigned char)*(it1+1)] &&
-            rc_alphabet[(unsigned char)*(it1+1)] > rc_alphabet[(unsigned char)*(it1+2)] &&
-            rc_alphabet[(unsigned char)*(it1-1)] <= rc_alphabet[(unsigned char)*(it1)] &&
-            rc_alphabet[(unsigned char)*(it1+2)] >= rc_alphabet[(unsigned char)*(it1+3)]) {
+        if (begin <= it1-3 &&
+            rc_alphabet[(unsigned char)*it1] < rc_alphabet[(unsigned char)*(it1-1)] &&
+            rc_alphabet[(unsigned char)*(it1-1)] > rc_alphabet[(unsigned char)*(it1-2)] &&
+            rc_alphabet[(unsigned char)*(it1+1)] <= rc_alphabet[(unsigned char)*(it1)] &&
+            rc_alphabet[(unsigned char)*(it1-2)] >= rc_alphabet[(unsigned char)*(it1-3)]) {
 
             // check if there is any SSEQ cores left behind
-            if (it2 < it1) {
-                init_core2(&(cores[core_index]), it2-1, it1-it2+2, it2-begin-1+offset, it1-begin+1+offset);
+            if (it1 < it2) {
+                init_core2(&(cores[core_index]), it2+1, it2-it1+2, end-it2-1+offset, end-it1-1+offset);
                 core_index++;
             }
 
             // create LMAX core
-            it2 = it1 + 3;
-            init_core2(&(cores[core_index]), it1, it2-it1, it1-begin+offset, it2-begin+offset);
+            it2 = it1 - 3;
+            init_core2(&(cores[core_index]), it1, 3, end-it1-1+offset, end-it2-1+offset);
             core_index++;
 
             continue;

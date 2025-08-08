@@ -144,8 +144,7 @@ void init_core2(struct core *cr, const char *begin, uint64_t distance, uint64_t 
     ubit_size shift = 0;
     int block_index = block_number - 1;
 
-    for (const char *it = begin + distance - 1; begin <= it; it--) {
-
+    for (const char *it = begin - distance + 1; it <= begin; it++) {
         int o_bit_rep = rc_alphabet[(int)(*it)];
 
         /* shift and paste */
