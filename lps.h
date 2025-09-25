@@ -66,18 +66,6 @@ struct lps {
 };
 
 /**
- * @brief Reverses a string and stores the result in a dynamically allocated buffer.
- *
- * @param str The input string to reverse (must be valid for the given length).
- * @param len The length of the input string (excluding null terminator, if any).
- * @param rev Pointer to a char pointer where the reversed string will be stored.
- *            Memory is dynamically allocated and must be freed by the caller.
- *
- * @note The reversed string does not include a null terminator.
- */
-void reverse(const char *str, int len, char **rev);
-
-/**
  * @brief Constructs an lps object from a string.
  * 
  * @param lps_ptr The `lps` object that will be initialized
