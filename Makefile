@@ -27,7 +27,10 @@ ABS_PREFIX := $(realpath $(PREFIX))
 INCLUDE_DIR = $(ABS_PREFIX)/include
 LIB_DIR = $(ABS_PREFIX)/lib
 
-.PHONY: all clean install uninstall test
+.PHONY: all clean install uninstall test header_only
+
+header_only: $(HDR) $(SRC)
+	sh ./gen_header_only.sh 
 
 install: clean $(STATIC) $(DYNAMIC) lcptools
 	mkdir -p $(INCLUDE_DIR)
