@@ -62,6 +62,7 @@ extern "C" {
 struct lps {
     int level;
     int size;
+    int capacity;
     struct core *cores;
 };
 
@@ -253,6 +254,13 @@ int lps_eq(const struct lps *lhs, const struct lps *rhs);
  * @return 1 if the lps objects are not equal, 0 otherwise.
  */
 int lps_neq(const struct lps *lhs, const struct lps *rhs);
+
+/**
+ * @brief Clears the lps object.
+ *
+ * @param lps_ptr The `lps` object to be cleared.
+ */
+void lps_clear(struct lps *lps_ptr);
 
 #ifdef __cplusplus
 }

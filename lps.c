@@ -3,6 +3,7 @@
 void init_lps(struct lps *lps_ptr, const char *str, int len) {   
     lps_ptr->level = 1;
     lps_ptr->size = 0;
+    lps_ptr->capacity = (len/CONSTANT_FACTOR);
     lps_ptr->cores = (struct core *)malloc((len/CONSTANT_FACTOR)*sizeof(struct core));
     lps_ptr->size = parse1(str, str+len, lps_ptr->cores, 0);
 }
@@ -10,6 +11,7 @@ void init_lps(struct lps *lps_ptr, const char *str, int len) {
 void init_lps_offset(struct lps *lps_ptr, const char *str, int len, uint64_t offset) {   
     lps_ptr->level = 1;
     lps_ptr->size = 0;
+    lps_ptr->capacity = (len/CONSTANT_FACTOR);
     lps_ptr->cores = (struct core *)malloc((len/CONSTANT_FACTOR)*sizeof(struct core));
     lps_ptr->size = parse1(str, str+len, lps_ptr->cores, offset);
 }
@@ -17,6 +19,7 @@ void init_lps_offset(struct lps *lps_ptr, const char *str, int len, uint64_t off
 void init_lps2(struct lps *lps_ptr, const char *str, int len) {   
     lps_ptr->level = 1;
     lps_ptr->size = 0;
+    lps_ptr->capacity = (len/CONSTANT_FACTOR);
     lps_ptr->cores = (struct core *)malloc((len/CONSTANT_FACTOR)*sizeof(struct core));
     lps_ptr->size = parse2(str, str+len, lps_ptr->cores, 0);
 }
@@ -38,6 +41,7 @@ void init_lps3(struct lps *lps_ptr, FILE *in) {
 
     if (lps_ptr->size) {
         // allocate memory for the cores array
+        lps_ptr->capacity = (lps_ptr->size);
         lps_ptr->cores = (struct core *)malloc(lps_ptr->size * sizeof(struct core));
         if (fread(lps_ptr->cores, lps_ptr->size * sizeof(struct core), 1, in) != 1) {
             fprintf(stderr, "Error reading cores from file\n");
@@ -55,6 +59,7 @@ void init_lps4(struct lps *lps_ptr, const char *str, int len, int lcp_level, int
     lps_ptr->size = 0; 
     int estimated_size = (int)(len / pow((double)CONSTANT_FACTOR, lcp_level));
     lps_ptr->cores = (struct core *)malloc(estimated_size*sizeof(struct core));
+    lps_ptr->capacity = (estimated_size);
 
     int str_index = 0, core_index = 0;
 
@@ -114,8 +119,10 @@ void init_lps4(struct lps *lps_ptr, const char *str, int len, int lcp_level, int
         free(temp_lps.cores);
     }
 
-    if (lps_ptr->size)
+    if (lps_ptr->size && lps_ptr->size >= lps_ptr->capacity){
         lps_ptr->cores = (struct core*)realloc(lps_ptr->cores, lps_ptr->size * sizeof(struct core));
+        lps_ptr->capacity = lps_ptr->size;
+    }
 }
 
 void free_lps(struct lps *lps_ptr) {
@@ -455,8 +462,10 @@ int lps_deepen1(struct lps *lps_ptr) {
 
     lps_ptr->level++;
 
-    if (lps_ptr->size)
+    if (lps_ptr->size && lps_ptr->size >= lps_ptr->capacity){
         lps_ptr->cores = (struct core*)realloc(lps_ptr->cores, lps_ptr->size * sizeof(struct core));
+        lps_ptr->capacity = lps_ptr->size;
+    }
 
     return 1;
 }
@@ -506,4 +515,8 @@ int lps_neq(const struct lps *lhs, const struct lps *rhs) {
     }
 
     return 0;
+}
+
+void lps_clear(struct lps *lps_ptr) {
+    lps_ptr->size = 0;
 }
