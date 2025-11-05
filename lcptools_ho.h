@@ -62,20 +62,9 @@ extern "C" {
 struct lps {
     int level;
     int size;
+    int capacity;
     struct core *cores;
 };
-
-/**
- * @brief Reverses a string and stores the result in a dynamically allocated buffer.
- *
- * @param str The input string to reverse (must be valid for the given length).
- * @param len The length of the input string (excluding null terminator, if any).
- * @param rev Pointer to a char pointer where the reversed string will be stored.
- *            Memory is dynamically allocated and must be freed by the caller.
- *
- * @note The reversed string does not include a null terminator.
- */
-void reverse(const char *str, int len, char **rev);
 
 /**
  * @brief Constructs an lps object from a string.
@@ -266,6 +255,13 @@ int lps_eq(const struct lps *lhs, const struct lps *rhs);
  */
 int lps_neq(const struct lps *lhs, const struct lps *rhs);
 
+/**
+ * @brief Clears the lps object.
+ *
+ * @param lps_ptr The `lps` object to be cleared.
+ */
+void lps_clear(struct lps *lps_ptr);
+
 #ifdef __cplusplus
 }
 #endif
@@ -436,6 +432,21 @@ struct core {
     uint64_t end;
 };
 
+
+/**
+ * @brief Computes the 32-bit MurmurHash3 hash for a given key.
+ *
+ * This function computes a 32-bit hash of the input data 'key' with the
+ * specified length 'len' and an optional seed value. It processes the
+ * input in blocks and handles any remaining bytes.
+ *
+ * @param key Pointer to the data to be hashed.
+ * @param len The length of the data in bytes.
+ * @param seed An initial seed value for the hash computation.
+ * @return The resulting 32-bit hash value.
+ */
+uint32_t MurmurHash3_32(const void *key, int len, uint32_t seed) ;
+
 /**
  * @brief Initializes a core structure with the provided string data and index range.
  * 
@@ -586,26 +597,10 @@ int core_leq(const struct core *lhs, const struct core *rhs);
 #endif
 #ifdef LCPTOOLS_IMPL
 
-void reverse(const char *str, int len, char **rev) {
-    *rev = (char*) malloc(len*sizeof(char));
-    int left = 0;
-    int right = len - 1;
-
-    while (left < right) {
-        (*rev)[left] = str[right];
-        (*rev)[right] = str[left];
-
-        left++;
-        right--;
-    }
-    if (left == right) {
-        (*rev)[left] = str[left];
-    }
-}
-
 void init_lps(struct lps *lps_ptr, const char *str, int len) {   
     lps_ptr->level = 1;
     lps_ptr->size = 0;
+    lps_ptr->capacity = (len/CONSTANT_FACTOR);
     lps_ptr->cores = (struct core *)malloc((len/CONSTANT_FACTOR)*sizeof(struct core));
     lps_ptr->size = parse1(str, str+len, lps_ptr->cores, 0);
 }
@@ -613,6 +608,7 @@ void init_lps(struct lps *lps_ptr, const char *str, int len) {
 void init_lps_offset(struct lps *lps_ptr, const char *str, int len, uint64_t offset) {   
     lps_ptr->level = 1;
     lps_ptr->size = 0;
+    lps_ptr->capacity = (len/CONSTANT_FACTOR);
     lps_ptr->cores = (struct core *)malloc((len/CONSTANT_FACTOR)*sizeof(struct core));
     lps_ptr->size = parse1(str, str+len, lps_ptr->cores, offset);
 }
@@ -620,11 +616,9 @@ void init_lps_offset(struct lps *lps_ptr, const char *str, int len, uint64_t off
 void init_lps2(struct lps *lps_ptr, const char *str, int len) {   
     lps_ptr->level = 1;
     lps_ptr->size = 0;
+    lps_ptr->capacity = (len/CONSTANT_FACTOR);
     lps_ptr->cores = (struct core *)malloc((len/CONSTANT_FACTOR)*sizeof(struct core));
-    char *rev = NULL;
-    reverse(str, len, &rev);
-    lps_ptr->size = parse2(rev, rev+len, lps_ptr->cores, 0);
-    free(rev);
+    lps_ptr->size = parse2(str, str+len, lps_ptr->cores, 0);
 }
 
 void init_lps3(struct lps *lps_ptr, FILE *in) {
@@ -644,6 +638,7 @@ void init_lps3(struct lps *lps_ptr, FILE *in) {
 
     if (lps_ptr->size) {
         // allocate memory for the cores array
+        lps_ptr->capacity = (lps_ptr->size);
         lps_ptr->cores = (struct core *)malloc(lps_ptr->size * sizeof(struct core));
         if (fread(lps_ptr->cores, lps_ptr->size * sizeof(struct core), 1, in) != 1) {
             fprintf(stderr, "Error reading cores from file\n");
@@ -661,6 +656,7 @@ void init_lps4(struct lps *lps_ptr, const char *str, int len, int lcp_level, int
     lps_ptr->size = 0; 
     int estimated_size = (int)(len / pow((double)CONSTANT_FACTOR, lcp_level));
     lps_ptr->cores = (struct core *)malloc(estimated_size*sizeof(struct core));
+    lps_ptr->capacity = (estimated_size);
 
     int str_index = 0, core_index = 0;
 
@@ -720,8 +716,10 @@ void init_lps4(struct lps *lps_ptr, const char *str, int len, int lcp_level, int
         free(temp_lps.cores);
     }
 
-    if (lps_ptr->size)
+    if (lps_ptr->size && lps_ptr->size >= lps_ptr->capacity){
         lps_ptr->cores = (struct core*)realloc(lps_ptr->cores, lps_ptr->size * sizeof(struct core));
+        lps_ptr->capacity = lps_ptr->size;
+    }
 }
 
 void free_lps(struct lps *lps_ptr) {
@@ -781,7 +779,7 @@ int parse1(const char *begin, const char *end, struct core *cores, uint64_t offs
 
                 // create RINT core
                 it2 = it1 + 2 + middle_count;
-                init_core1(&(cores[core_index]), it1, it2-it1, it1-begin+offset, it2-begin+offset);
+                init_core1(&(cores[core_index]), it1, 2+middle_count, it1-begin+offset, it2-begin+offset);
                 core_index++;
 
                 continue;
@@ -799,7 +797,7 @@ int parse1(const char *begin, const char *end, struct core *cores, uint64_t offs
 
             // create LMIN core
             it2 = it1 + 3;
-            init_core1(&(cores[core_index]), it1, it2-it1, it1-begin+offset, it2-begin+offset);
+            init_core1(&(cores[core_index]), it1, 3, it1-begin+offset, it2-begin+offset);
             core_index++;
 
             continue;
@@ -824,7 +822,7 @@ int parse1(const char *begin, const char *end, struct core *cores, uint64_t offs
 
             // create LMAX core
             it2 = it1 + 3;
-            init_core1(&(cores[core_index]), it1, it2-it1, it1-begin+offset, it2-begin+offset);
+            init_core1(&(cores[core_index]), it1, 3, it1-begin+offset, it2-begin+offset);
             core_index++;
 
             continue;
@@ -836,62 +834,56 @@ int parse1(const char *begin, const char *end, struct core *cores, uint64_t offs
 
 int parse2(const char *begin, const char *end, struct core *cores, uint64_t offset) {
 
-    const char *it1 = begin;
-    const char *it2 = end;
+    const char *it1 = end - 1;
+    const char *it2 = begin - 1;
     int core_index = 0;
-    int last_invalid_char_index = -1;
 
     // find lcp cores
-    for (; it1 + 2 < end; it1++) {
+    for (; begin <= it1 - 2; it1--) {
 
         // skip invalid character
-        if (rc_alphabet[(unsigned char)*it1] == -1) {
-            last_invalid_char_index = it1 - begin;
-            continue;
-        }
-
-        if (rc_alphabet[(unsigned char)*it1] == rc_alphabet[(unsigned char)*(it1+1)]) {
+        if (rc_alphabet[(unsigned char)*it1] == rc_alphabet[(unsigned char)*(it1-1)]) {
             continue;
         }
 
         // check for RINT core
-        if (rc_alphabet[(unsigned char)*(it1+1)] == rc_alphabet[(unsigned char)*(it1+2)]) {
+        if (rc_alphabet[(unsigned char)*(it1-1)] == rc_alphabet[(unsigned char)*(it1-2)]) {
 
             // count middle characters
             uint32_t middle_count = 1;
-            const char *temp = it1 + 2;
-            while (temp < end && rc_alphabet[(unsigned char)*(temp-1)] == rc_alphabet[(unsigned char)*temp]) {
-                temp++;
+            const char *temp = it1 - 2;
+            while (begin <= temp && rc_alphabet[(unsigned char)*(temp+1)] == rc_alphabet[(unsigned char)*temp]) {
+                temp--;
                 middle_count++;
             }
-            if (temp != end) {
+            if (begin <= temp) {
                 // check if there is any SSEQ cores left behind
-                if (it2 < it1 && last_invalid_char_index < it2 - begin - 1) {
-                    init_core2(&(cores[core_index]), it2-1, it1-it2+2, it2-begin-1+offset, it1-begin+1+offset);
+                if (it1 < it2) {
+                    init_core2(&(cores[core_index]), it2+1, it2-it1+2, end-it2-1+offset, end-it1-1+offset);
                     core_index++;
                 }
 
                 // create RINT core
-                it2 = it1 + 2 + middle_count;
-                init_core2(&(cores[core_index]), it1, it2-it1, it1-begin+offset, it2-begin+offset);
+                it2 = it1 - 2 - middle_count;
+                init_core2(&(cores[core_index]), it1, 2+middle_count, end-it1-1+offset, end-it2-1+offset);
                 core_index++;
 
                 continue;
             }
         }
 
-        if (rc_alphabet[(unsigned char)*it1] > rc_alphabet[(unsigned char)*(it1+1)] &&
-            rc_alphabet[(unsigned char)*(it1+1)] < rc_alphabet[(unsigned char)*(it1+2)]) {
+        if (rc_alphabet[(unsigned char)*it1] > rc_alphabet[(unsigned char)*(it1-1)] &&
+            rc_alphabet[(unsigned char)*(it1-1)] < rc_alphabet[(unsigned char)*(it1-2)]) {
 
             // check if there is any SSEQ cores left behind
-            if (it2 < it1 && last_invalid_char_index < it2 - begin - 1) {
-                init_core2(&(cores[core_index]), it2-1, it1-it2+2, it2-begin-1+offset, it1-begin+1+offset);
+            if (it1 < it2) {
+                init_core2(&(cores[core_index]), it2+1, it2-it1+2, end-it2-1+offset, end-it1-1+offset);
                 core_index++;
             }
 
             // create LMIN core
-            it2 = it1 + 3;
-            init_core2(&(cores[core_index]), it1, it2-it1, it1-begin+offset, it2-begin+offset);
+            it2 = it1 - 3;
+            init_core2(&(cores[core_index]), it1, 3, end-it1-1+offset, end-it2-1+offset);
             core_index++;
 
             continue;
@@ -902,21 +894,21 @@ int parse2(const char *begin, const char *end, struct core *cores, uint64_t offs
         }
 
         // check for LMAX
-        if (it1+3 < end &&
-            rc_alphabet[(unsigned char)*it1] < rc_alphabet[(unsigned char)*(it1+1)] &&
-            rc_alphabet[(unsigned char)*(it1+1)] > rc_alphabet[(unsigned char)*(it1+2)] &&
-            rc_alphabet[(unsigned char)*(it1-1)] <= rc_alphabet[(unsigned char)*(it1)] &&
-            rc_alphabet[(unsigned char)*(it1+2)] >= rc_alphabet[(unsigned char)*(it1+3)]) {
+        if (begin <= it1-3 &&
+            rc_alphabet[(unsigned char)*it1] < rc_alphabet[(unsigned char)*(it1-1)] &&
+            rc_alphabet[(unsigned char)*(it1-1)] > rc_alphabet[(unsigned char)*(it1-2)] &&
+            rc_alphabet[(unsigned char)*(it1+1)] <= rc_alphabet[(unsigned char)*(it1)] &&
+            rc_alphabet[(unsigned char)*(it1-2)] >= rc_alphabet[(unsigned char)*(it1-3)]) {
 
             // check if there is any SSEQ cores left behind
-            if (it2 < it1 && last_invalid_char_index < it2 - begin - 1) {
-                init_core2(&(cores[core_index]), it2-1, it1-it2+2, it2-begin-1+offset, it1-begin+1+offset);
+            if (it1 < it2) {
+                init_core2(&(cores[core_index]), it2+1, it2-it1+2, end-it2-1+offset, end-it1-1+offset);
                 core_index++;
             }
 
             // create LMAX core
-            it2 = it1 + 3;
-            init_core2(&(cores[core_index]), it1, it2-it1, it1-begin+offset, it2-begin+offset);
+            it2 = it1 - 3;
+            init_core2(&(cores[core_index]), it1, 3, end-it1-1+offset, end-it2-1+offset);
             core_index++;
 
             continue;
@@ -1067,8 +1059,10 @@ int lps_deepen1(struct lps *lps_ptr) {
 
     lps_ptr->level++;
 
-    if (lps_ptr->size)
+    if (lps_ptr->size && lps_ptr->size >= lps_ptr->capacity){
         lps_ptr->cores = (struct core*)realloc(lps_ptr->cores, lps_ptr->size * sizeof(struct core));
+        lps_ptr->capacity = lps_ptr->size;
+    }
 
     return 1;
 }
@@ -1118,6 +1112,10 @@ int lps_neq(const struct lps *lhs, const struct lps *rhs) {
     }
 
     return 0;
+}
+
+void lps_clear(struct lps *lps_ptr) {
+    lps_ptr->size = 0;
 }
 /**
  * @file encoding.c
@@ -1237,7 +1235,7 @@ int LCP_INIT_FILE(const char *encoding_file, int verbose) {
  * performance analysis.
  */
 
-
+#include <inttypes.h>
 /**
  * @brief Computes the 32-bit MurmurHash3 hash for a given key.
  *
@@ -1324,8 +1322,8 @@ void init_core2(struct core *cr, const char *begin, uint64_t distance, uint64_t 
     cr->label = 0;
     cr->label |= ((distance-2) << 6);
     cr->label |= (rc_alphabet[(int)(*(begin))] << 4);
-    cr->label |= (rc_alphabet[(int)(*(begin+distance-2))] << 2);
-    cr->label |= (rc_alphabet[(int)(*(begin+distance-1))]);
+    cr->label |= (rc_alphabet[(int)(*(begin-distance+2))] << 2);
+    cr->label |= (rc_alphabet[(int)(*(begin-distance+1))]);
     cr->bit_rep = 0x8000000000000000 | cr->label;
     cr->bit_size = 2 * distance;
 }
@@ -1371,12 +1369,12 @@ void core_compress(const struct core *left_core, struct core *right_core) {
         uint64_t left_core_2 = (left_core->bit_rep >> 2) & 3;
         uint64_t left_core_middle_count = (left_core->bit_rep & 0x7FFFFFFFFFFFFFFF) >> 6;
         uint64_t left_core_1 = (left_core->bit_rep >> 4) & 3;
-        
+
         uint64_t right_core_3 = (right_core->bit_rep) & 3;
         uint64_t right_core_2 = (right_core->bit_rep >> 2) & 3;
         uint64_t right_core_middle_count = (right_core->bit_rep & 0x7FFFFFFFFFFFFFFF) >> 6;
         uint64_t right_core_1 = (right_core->bit_rep >> 4) & 3;
-        
+
         if (left_core_3 != right_core_3) { // if right characters mismatches
             if ((left_core_3 & 1) != (right_core_3 & 1)) {
                 right_core->bit_rep = (right_core_3 & 1); // 0b00 + r % 2
@@ -1384,7 +1382,7 @@ void core_compress(const struct core *left_core, struct core *right_core) {
                 right_core->bit_rep = 2 + ((right_core_3 >> 1) & 1); // 0b10 + r % 2
             }
             right_core->bit_size = 2;
-        } 
+        }
         else if (left_core_2 != right_core_2) { // if middle characters mismatches
             if ((left_core_2 & 1) != (right_core_2 & 1)) {
                 right_core->bit_rep = 4 + (right_core_2 & 1); // 0b100 + r % 2
@@ -1392,7 +1390,7 @@ void core_compress(const struct core *left_core, struct core *right_core) {
                 right_core->bit_rep = 6 + ((right_core_2 >> 1) & 1); // 0b110 + r % 2
             }
             right_core->bit_size = (64 - __builtin_clzll(right_core->bit_rep));
-        } 
+        }
         else if (left_core_middle_count != right_core_middle_count) { // middle character counts mismatches
             if (left_core_middle_count < right_core_middle_count) {
                 // compare left_core_1 with right_core_2
@@ -1411,7 +1409,7 @@ void core_compress(const struct core *left_core, struct core *right_core) {
                 }
                 right_core->bit_size = (64 - __builtin_clzll(right_core->bit_rep));
             }
-        } 
+        }
         else if (left_core_1 != right_core_1) { // left characters mismatches
             if ((left_core_1 & 1) != (right_core_1 & 1)) {
                 right_core->bit_rep = 4 * (left_core_middle_count + 1) + (right_core_1 & 1);
@@ -1419,7 +1417,7 @@ void core_compress(const struct core *left_core, struct core *right_core) {
                 right_core->bit_rep = 2 * (2 * (left_core_middle_count + 1) + 1) + ((right_core_1 >> 1) & 1);
             }
             right_core->bit_size = (64 - __builtin_clzll(right_core->bit_rep));
-        } 
+        }
         else { // they are same
             right_core->bit_rep = 2 * right_core->bit_size;
             right_core->bit_size = (64 - __builtin_clzll(right_core->bit_rep));
@@ -1445,19 +1443,19 @@ void print_core(const struct core *cr) {
     if (cr->bit_rep & 0x8000000000000000) { // if printing 1-level cores
         uint64_t middle_count = (0x7FFFFFFFFFFFFFFF & cr->bit_rep) >> 6;
         uint64_t middle_val = (cr->bit_rep >> 2) & 3;
-        printf("%ld", ((cr->bit_rep >> 5) & 1));
-        printf("%ld", ((cr->bit_rep >> 4) & 1));
+        printf("%" PRIu64, ((cr->bit_rep >> 5) & 1));
+        printf("%" PRIu64, ((cr->bit_rep >> 4) & 1));
         for (uint64_t i=0; i<middle_count; i++) {
-            printf("%ld", ((middle_val >> 1) & 1));
-            printf("%ld", (middle_val & 1));           
+            printf("%" PRIu64, ((middle_val >> 1) & 1));
+            printf("%" PRIu64, (middle_val & 1));
         }
-        printf("%ld", ((cr->bit_rep >> 1) & 1));
-        printf("%ld", (cr->bit_rep & 1));
+        printf("%" PRIu64, ((cr->bit_rep >> 1) & 1));
+        printf("%" PRIu64, (cr->bit_rep & 1));
     } else {
         for (ubit_size index = cr->bit_size - 1; 0 < index; index--) {
-            printf("%ld", ((cr->bit_rep >> index) & 1));
+            printf("%" PRIu64, ((cr->bit_rep >> index) & 1));
         }
-        printf("%ld", (cr->bit_rep & 1));
+        printf("%" PRIu64, (cr->bit_rep & 1));
     }
 }
 
