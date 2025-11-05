@@ -20,7 +20,7 @@
  */
 
 #include "core.h"
-
+#include <inttypes.h>
 /**
  * @brief Computes the 32-bit MurmurHash3 hash for a given key.
  *
@@ -154,12 +154,12 @@ void core_compress(const struct core *left_core, struct core *right_core) {
         uint64_t left_core_2 = (left_core->bit_rep >> 2) & 3;
         uint64_t left_core_middle_count = (left_core->bit_rep & 0x7FFFFFFFFFFFFFFF) >> 6;
         uint64_t left_core_1 = (left_core->bit_rep >> 4) & 3;
-        
+
         uint64_t right_core_3 = (right_core->bit_rep) & 3;
         uint64_t right_core_2 = (right_core->bit_rep >> 2) & 3;
         uint64_t right_core_middle_count = (right_core->bit_rep & 0x7FFFFFFFFFFFFFFF) >> 6;
         uint64_t right_core_1 = (right_core->bit_rep >> 4) & 3;
-        
+
         if (left_core_3 != right_core_3) { // if right characters mismatches
             if ((left_core_3 & 1) != (right_core_3 & 1)) {
                 right_core->bit_rep = (right_core_3 & 1); // 0b00 + r % 2
@@ -167,7 +167,7 @@ void core_compress(const struct core *left_core, struct core *right_core) {
                 right_core->bit_rep = 2 + ((right_core_3 >> 1) & 1); // 0b10 + r % 2
             }
             right_core->bit_size = 2;
-        } 
+        }
         else if (left_core_2 != right_core_2) { // if middle characters mismatches
             if ((left_core_2 & 1) != (right_core_2 & 1)) {
                 right_core->bit_rep = 4 + (right_core_2 & 1); // 0b100 + r % 2
@@ -175,7 +175,7 @@ void core_compress(const struct core *left_core, struct core *right_core) {
                 right_core->bit_rep = 6 + ((right_core_2 >> 1) & 1); // 0b110 + r % 2
             }
             right_core->bit_size = (64 - __builtin_clzll(right_core->bit_rep));
-        } 
+        }
         else if (left_core_middle_count != right_core_middle_count) { // middle character counts mismatches
             if (left_core_middle_count < right_core_middle_count) {
                 // compare left_core_1 with right_core_2
@@ -194,7 +194,7 @@ void core_compress(const struct core *left_core, struct core *right_core) {
                 }
                 right_core->bit_size = (64 - __builtin_clzll(right_core->bit_rep));
             }
-        } 
+        }
         else if (left_core_1 != right_core_1) { // left characters mismatches
             if ((left_core_1 & 1) != (right_core_1 & 1)) {
                 right_core->bit_rep = 4 * (left_core_middle_count + 1) + (right_core_1 & 1);
@@ -202,7 +202,7 @@ void core_compress(const struct core *left_core, struct core *right_core) {
                 right_core->bit_rep = 2 * (2 * (left_core_middle_count + 1) + 1) + ((right_core_1 >> 1) & 1);
             }
             right_core->bit_size = (64 - __builtin_clzll(right_core->bit_rep));
-        } 
+        }
         else { // they are same
             right_core->bit_rep = 2 * right_core->bit_size;
             right_core->bit_size = (64 - __builtin_clzll(right_core->bit_rep));
@@ -228,19 +228,19 @@ void print_core(const struct core *cr) {
     if (cr->bit_rep & 0x8000000000000000) { // if printing 1-level cores
         uint64_t middle_count = (0x7FFFFFFFFFFFFFFF & cr->bit_rep) >> 6;
         uint64_t middle_val = (cr->bit_rep >> 2) & 3;
-        printf("%ld", ((cr->bit_rep >> 5) & 1));
-        printf("%ld", ((cr->bit_rep >> 4) & 1));
+        printf("%" PRIu64, ((cr->bit_rep >> 5) & 1));
+        printf("%" PRIu64, ((cr->bit_rep >> 4) & 1));
         for (uint64_t i=0; i<middle_count; i++) {
-            printf("%ld", ((middle_val >> 1) & 1));
-            printf("%ld", (middle_val & 1));           
+            printf("%" PRIu64, ((middle_val >> 1) & 1));
+            printf("%" PRIu64, (middle_val & 1));
         }
-        printf("%ld", ((cr->bit_rep >> 1) & 1));
-        printf("%ld", (cr->bit_rep & 1));
+        printf("%" PRIu64, ((cr->bit_rep >> 1) & 1));
+        printf("%" PRIu64, (cr->bit_rep & 1));
     } else {
         for (ubit_size index = cr->bit_size - 1; 0 < index; index--) {
-            printf("%ld", ((cr->bit_rep >> index) & 1));
+            printf("%" PRIu64, ((cr->bit_rep >> index) & 1));
         }
-        printf("%ld", (cr->bit_rep & 1));
+        printf("%" PRIu64, (cr->bit_rep & 1));
     }
 }
 
