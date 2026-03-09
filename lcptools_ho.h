@@ -54,10 +54,13 @@
 extern "C" {
 #endif
 
+#include <pthread.h>
 #include <stdio.h>
 #include <math.h>
 
-#define CONSTANT_FACTOR         1.5
+#ifndef CONSTANT_FACTOR
+#define CONSTANT_FACTOR     1.5
+#endif
 
 struct lps {
     int level;
@@ -220,6 +223,26 @@ int lps_deepen1(struct lps *lps_ptr);
 int lps_deepen(struct lps *lps_ptr, int lcp_level);
 
 /**
+ * @brief Deepens the compression level of the LCP structure in parallel. This method 
+ * compresses the existing cores and finds new cores.
+ *
+ * @param lps_ptr The `lps` object that will be parsed over.
+ * @param thread_number The number of theads to run the DCT.
+ * @return 1 if successful in deepening the structure, 0 otherwise.
+ */
+int lps_deepen1_parallel(struct lps *lps_ptr, int thread_number);
+
+/**
+ * @brief Deepens the compression level of the LCP structure to a specific level in threads.
+ *
+ * @param lps_ptr The `lps` object that will be parsed over.
+ * @param lcp_level The target compression level to deepen to.
+ * @param thread_number The number of theads to run the DCT.
+ * @return 1 if deepening was successful, 0 otherwise.
+ */
+int lps_deepen_parallel(struct lps *lps_ptr, int lcp_level, int thread_number);
+
+/**
  * @brief Outputs the representation of a `lcp` pointer.
  *
  * This function iterates over the cores in the `cores` array and outputs them.
@@ -255,12 +278,6 @@ int lps_eq(const struct lps *lhs, const struct lps *rhs);
  */
 int lps_neq(const struct lps *lhs, const struct lps *rhs);
 
-/**
- * @brief Clears the lps object.
- *
- * @param lps_ptr The `lps` object to be cleared.
- */
-void lps_clear(struct lps *lps_ptr);
 
 #ifdef __cplusplus
 }
@@ -538,7 +555,9 @@ void print_core(const struct core *cr);
  * @param rhs The right-hand side `core` object.
  * @return 1 if the two objects are equal, 0 otherwise.
  */
-int core_eq(const struct core *lhs, const struct core *rhs);
+static inline int core_eq(const struct core *lhs, const struct core *rhs) {
+    return lhs->bit_rep == rhs->bit_rep;
+}
 
 /**
  * @brief Operator overload for greater-than comparison between two `core`
@@ -548,7 +567,9 @@ int core_eq(const struct core *lhs, const struct core *rhs);
  * @param rhs The right-hand side `core` object.
  * @return 1 if the left-hand object is greater, 0 otherwise.
  */
-int core_neq(const struct core *lhs, const struct core *rhs);
+static inline int core_neq(const struct core *lhs, const struct core *rhs) {
+    return lhs->bit_rep != rhs->bit_rep;
+}
 
 /**
  * @brief Operator overload for smaller-than comparison between two `core`
@@ -558,7 +579,9 @@ int core_neq(const struct core *lhs, const struct core *rhs);
  * @param rhs The right-hand side `core` object.
  * @return 1 if the left-hand object is smaller, 0 otherwise.
  */
-int core_gt(const struct core *lhs, const struct core *rhs);
+static inline int core_gt(const struct core *lhs, const struct core *rhs) {
+    return lhs->bit_rep > rhs->bit_rep;
+}
 
 /**
  * @brief Operator overload for not-equal-to comparison between two `core`
@@ -568,7 +591,9 @@ int core_gt(const struct core *lhs, const struct core *rhs);
  * @param rhs The right-hand side `core` object.
  * @return 1 if the two objects are not equal, 0 otherwise.
  */
-int core_lt(const struct core *lhs, const struct core *rhs);
+static inline int core_lt(const struct core *lhs, const struct core *rhs) {
+    return lhs->bit_rep < rhs->bit_rep;
+}
 
 /**
  * @brief Operator overload for greater-than-or-equal-to comparison between
@@ -578,7 +603,9 @@ int core_lt(const struct core *lhs, const struct core *rhs);
  * @param rhs The right-hand side `core` object.
  * @return 1 if the left-hand object is greater than or equal, 0 otherwise.
  */
-int core_geq(const struct core *lhs, const struct core *rhs);
+static inline int core_geq(const struct core *lhs, const struct core *rhs) {
+    return lhs->bit_rep >= rhs->bit_rep;
+}
 
 /**
  * @brief Operator overload for smaller-than-or-equal-to comparison between
@@ -588,7 +615,240 @@ int core_geq(const struct core *lhs, const struct core *rhs);
  * @param rhs The right-hand side `core` object.
  * @return 1 if the left-hand object is smaller than or equal, 0 otherwise.
  */
-int core_leq(const struct core *lhs, const struct core *rhs);
+static inline int core_leq(const struct core *lhs, const struct core *rhs) {
+    return lhs->bit_rep <= rhs->bit_rep;
+}
+
+/**
+ * @brief Return the minimum of two ubit_size values.
+ *
+ * @param a First value.
+ * @param b Second value.
+ * @return The smaller of a and b.
+ */
+static inline ubit_size umin(ubit_size a, ubit_size b) { 
+    return a < b ? a : b; 
+}
+
+/**
+ * @brief Compute the bit-length of a 64-bit unsigned integer.
+ *
+ * Bit-length is defined as the position of the most significant set bit
+ * (1-based). Returns 0 if x == 0.
+ *
+ * Uses __builtin_clzll for efficient leading-zero counting.
+ *
+ * @param x Input 64-bit unsigned integer.
+ * @return Number of significant bits required to represent x.
+ */
+static inline ubit_size bitlen_u64(uint64_t x) {
+    return x ? (ubit_size)(64u - (ubit_size)__builtin_clzll(x)) : 0u;
+}
+
+/**
+ * @brief Compute the bit-length of x with a minimum result of 2.
+ *
+ * Ensures the returned bit-length is at least 2, even if x has fewer
+ * significant bits (or is zero).
+ *
+ * @param x Input 64-bit unsigned integer.
+ * @return max(bitlen_u64(x), 2).
+ */
+static inline ubit_size bitlen_min2(uint64_t x) {
+    ubit_size bl = bitlen_u64(x);
+    return bl < 2u ? 2u : bl;
+}
+
+/**
+ * @brief Extract a 2-bit symbol from the low 6 bits of a packed value.
+ *
+ * The low 6 bits are interpreted as three 2-bit slots:
+ *   k = 0 → rightmost 2 bits
+ *   k = 1 → middle 2 bits
+ *   k = 2 → leftmost 2 bits
+ *
+ * @param rep Packed representation.
+ * @param k   Slot index (0–2).
+ * @return The 2-bit symbol at slot k.
+ */
+static inline uint64_t sym2(uint64_t rep, unsigned k) {
+    return k ? (rep >> k) & 3ull : rep & 3ull;
+}
+
+/**
+ * @brief Extract the middle repetition count stored above the low 6 bits.
+ *
+ * Bits 0–5 are reserved for 2-bit symbols. Bits above 6 contain the
+ * repetition count. The most significant bit is masked off before shifting.
+ *
+ * @param rep Packed representation.
+ * @return Middle repetition count.
+ */
+static inline uint64_t mid_count(uint64_t rep) {
+    return (rep & 0x7FFFFFFFFFFFFFFFull) >> 6;
+}
+
+/**
+ * @brief Emit an encoded index-bit value based on symbol comparison.
+ *
+ * Computes:
+ *   result = i + selected_bit or 2 + i + selected_bit, depending on 
+ *  from where the bit is selected
+ *
+ * If the least significant bits of a2 and b2 differ, select (b2 & 1).
+ * Otherwise, select ((b2 >> 1) & 1).
+ *
+ * @param a2 First 2-bit symbol.
+ * @param b2 Second 2-bit symbol.
+ * @param i  Base index multiplier.
+ * @return Encoded value 2 + i plus chosen bit from b2.
+ */
+static inline uint64_t emit_idx_bit(uint64_t a2, uint64_t b2, uint64_t i) {
+    if ((a2 & 1) != (b2 & 1)) {
+        return i + (b2 & 1);
+    }
+    return 2 + i + ((b2 >> 1) & 1);
+}
+
+/**
+ * @brief Perform level-1 compression of two adjacent cores.
+ *
+ * Implements the 3-symbol + middle-count encoding scheme.
+ * The caller guarantees that both `left` and `right` are already
+ * level-1 encoded.
+ *
+ * The function compares corresponding components of the packed
+ * representations in the following priority order:
+ *
+ *   1. Rightmost 2-bit symbol (L3 vs R3)
+ *   2. Leftmost 2-bit symbol (L2 vs R2)
+ *   3. Middle repetition count (Lm vs Rm)
+ *      - If counts differ, performs a boundary comparison:
+ *          • If Lm < Rm: compare L1 with R2
+ *          • Otherwise:  compare L2 with R1
+ *        The emitted index depends on the smaller count.
+ *   4. Final 2-bit symbol (L1 vs R1)
+ *   5. If all components match, emit a “same” encoding.
+ *
+ * In each mismatch case, the emitted value is:
+ *
+ *     out = 2 * index + selected_bit
+ *
+ * where the selected bit is derived from the compared 2-bit symbols.
+ *
+ * Side effects:
+ *   - Overwrites `right->bit_rep` with the compressed result.
+ *   - Updates `right->bit_size` to bitlen_min2(out).
+ *   - Propagates `left->start` into `right->start`.
+ *
+ * @param left   Pointer to left core (read-only, level-1 encoded).
+ * @param right  Pointer to right core (level-1 encoded, updated in place).
+ */
+static inline void core_compress_level1(const struct core *left, struct core *right) {
+    uint64_t L = left->bit_rep;
+    uint64_t R = right->bit_rep;
+
+    uint64_t L3 = sym2(L, 0), L2 = sym2(L, 2), L1 = sym2(L, 4);
+    uint64_t R3 = sym2(R, 0), R2 = sym2(R, 2), R1 = sym2(R, 4);
+
+    uint64_t Lm = mid_count(L);
+    uint64_t Rm = mid_count(R);
+
+    uint64_t out;
+
+    if (L3 != R3) {
+        // base = 0 (2*i with i=0)
+        out = emit_idx_bit(L3, R3, 0);
+        right->bit_rep = out;
+        right->bit_size = 2;        
+    }
+    else if (L2 != R2) {
+        // Your original used base=4/6 -> i=2 (since 2*i = 4)
+        out = emit_idx_bit(L2, R2, 4);
+        right->bit_rep = out;
+        right->bit_size = bitlen_min2(out);
+    }
+    else if (Lm != Rm) {
+        // Preserve your “compare across boundary depending on which count is smaller”
+        if (Lm < Rm) {
+            // compare left L1 with right R2; index = Lm + 1
+            out = emit_idx_bit(L1, R2, 4 * Lm + 4);
+        } else {
+            // compare left L2 with right R1; index = Rm + 1
+            out = emit_idx_bit(L2, R1, 4 * Rm + 4);
+        }
+        right->bit_rep = out;
+        right->bit_size = bitlen_min2(out);
+    }
+    else if (L1 != R1) {
+        // left mismatch: index = Lm + 1
+        out = emit_idx_bit(L1, R1, 4 * Lm + 4);
+        right->bit_rep = out;
+        right->bit_size = bitlen_min2(out);
+    }
+    else {
+        // same
+        out = 2ull * (uint64_t)right->bit_size;
+        right->bit_rep = out;
+        right->bit_size = bitlen_min2(out);
+    }
+
+    right->start = left->start;
+}
+
+
+/**
+ * @brief Perform upper-level compression via bounded first-difference encoding.
+ *
+ * The caller guarantees that both `left` and `right` are already
+ * upper-level encoded.
+ *
+ * The algorithm:
+ *
+ *   1. Compute a comparison bound:
+ *        bound = min(left->bit_size, right->bit_size, 64).
+ *
+ *   2. If the bit representations are identical:
+ *        idx = bound.
+ *      Otherwise:
+ *        - Compute x = left->bit_rep ^ right->bit_rep.
+ *        - Find the least significant differing bit:
+ *              idx = ctz(x).
+ *        - Clamp idx to `bound`.
+ *
+ *   3. Emit:
+ *        out = 2 * idx + bit_at_idx(right)
+ *
+ *      where bit_at_idx(right) is the bit of right->bit_rep at position idx.
+ *
+ * Side effects:
+ *   - Overwrites `right->bit_rep` with the compressed result.
+ *   - Updates `right->bit_size` to bitlen_min2(out).
+ *   - Propagates `left->start` into `right->start`.
+ *
+ * This encoding effectively captures the first differing bit
+ * (from the least significant side), bounded by the smaller size.
+ *
+ * @param left   Pointer to left core (read-only, upper-level encoded).
+ * @param right  Pointer to right core (upper-level encoded, updated in place).
+ */
+static inline void core_compress_upper(const struct core *left, struct core *right) {
+    ubit_size bound = umin(right->bit_size, umin(left->bit_size, 64u));
+
+    ubit_size idx;
+    if (left->bit_rep == right->bit_rep) {
+        idx = bound;
+    } else {
+        uint64_t x = left->bit_rep ^ right->bit_rep;   // nonzero here
+        idx = (ubit_size)__builtin_ctzll(x);
+        idx = umin(idx, bound);
+    }
+
+    uint64_t out = 2ull * (uint64_t)idx + ((right->bit_rep >> idx) & 1ull);
+    right->bit_rep = out;
+    right->bit_size = bitlen_min2(out);
+    right->start = left->start;
+}
 
 #ifdef __cplusplus
 }
@@ -1027,11 +1287,21 @@ int lcp_dct(struct lps *lps_ptr) {
         return -1;
     }
 
-    for (uint64_t dct_index = 0; dct_index < DCT_ITERATION_COUNT; dct_index++) {
-        struct core *it_left = lps_ptr->cores + lps_ptr->size - 2, *it_right = lps_ptr->cores + lps_ptr->size - 1;
+    if (lps_ptr->level == 1) {
+        for (uint64_t dct_index = 0; dct_index < DCT_ITERATION_COUNT; dct_index++) {
+            struct core *it_left = lps_ptr->cores + lps_ptr->size - 2, *it_right = lps_ptr->cores + lps_ptr->size - 1;
 
-        for (; lps_ptr->cores + dct_index <= it_left; it_left--, it_right--) {
-            core_compress(it_left, it_right);
+            for (; lps_ptr->cores + dct_index <= it_left; it_left--, it_right--) {
+                core_compress_level1(it_left, it_right);
+            }
+        }
+    } else {
+        for (uint64_t dct_index = 0; dct_index < DCT_ITERATION_COUNT; dct_index++) {
+            struct core *it_left = lps_ptr->cores + lps_ptr->size - 2, *it_right = lps_ptr->cores + lps_ptr->size - 1;
+
+            for (; lps_ptr->cores + dct_index <= it_left; it_left--, it_right--) {
+                core_compress_upper(it_left, it_right);
+            }
         }
     }
 
@@ -1073,6 +1343,247 @@ int lps_deepen(struct lps *lps_ptr, int lcp_level) {
         return 0;
 
     while (lps_ptr->level < lcp_level && lps_deepen1(lps_ptr))
+        ;
+
+    return 1;
+}
+
+typedef struct {
+    struct core *cores;     // destination cores (real array)
+    struct core dummy_left; // uncompressed core at begin-1
+    int offset_begin;       // inclusive i
+    int offset_end;         // exclusive i
+    int flags;              // 1 bit (process head) 1 bit (level 1 or not)
+} dct_worker_args_t;
+
+/**
+ * @brief Worker routine for parallel DCT compression.
+ *
+ * This function is executed by a single POSIX thread and performs
+ * compression on a contiguous subrange of cores. The behavior depends
+ * on the `flags` field:
+ *
+ * - flags == -1 : No work is performed (thread exits immediately).
+ * - flags % 2   : Use core_compress_level1().
+ * - otherwise   : Use core_compress_upper().
+ *
+ * If flags > 1, the worker also performs an additional boundary
+ * compression using `dummy_left` and the first core in its range.
+ * This is required when the thread's assigned range does not begin
+ * at the global DCT starting index, ensuring correctness across
+ * chunk boundaries.
+ *
+ * The function assumes that:
+ * - Each thread operates on a disjoint range of cores.
+ * - Any required boundary state is provided through `dummy_left`.
+ *
+ * @param argp Pointer to a dct_worker_args_t structure containing
+ *             the thread parameters.
+ *
+ * @return Always returns NULL (required by pthread signature).
+ */
+static void *dct_worker(void *argp) {
+    dct_worker_args_t *dct_params = (dct_worker_args_t *)argp;
+
+    if (dct_params->flags == -1) return NULL;
+
+    if (dct_params->flags % 2) {
+        for (int i = dct_params->offset_end - 1; dct_params->offset_begin < i; i--) {
+            core_compress_level1(dct_params->cores + (i - 1), dct_params->cores + i);
+        }
+        if (dct_params->flags > 1) {
+            core_compress_level1(&(dct_params->dummy_left), dct_params->cores + dct_params->offset_begin);
+        }
+    } else {
+        for (int i = dct_params->offset_end - 1; dct_params->offset_begin < i; i--) {
+            core_compress_upper(dct_params->cores + (i - 1), dct_params->cores + i);
+        }
+        if (dct_params->flags > 1) {
+            core_compress_upper(&(dct_params->dummy_left), dct_params->cores + dct_params->offset_begin);
+        }
+    }
+
+    return NULL;
+}
+
+/**
+ * @brief Executes one parallel DCT sweep over the cores array.
+ *
+ * This function divides the compression work starting at `dct_index`
+ * into approximately equal chunks and distributes them among
+ * `thread_number` threads. Each thread processes a contiguous
+ * subrange of cores using the dct_worker() routine.
+ *
+ * Work partitioning:
+ * - total = lps_ptr->size - dct_index
+ * - chunk size is computed using ceiling division.
+ * - Each thread receives a non-overlapping [begin, end) interval.
+ *
+ * Boundary handling:
+ * - Threads whose range does not start at dct_index receive a
+ *   copy of the left boundary core (`dummy_left`) to ensure
+ *   correct cross-boundary compression.
+ *
+ * Memory management:
+ * - Dynamically allocates thread handles and argument arrays.
+ * - Joins all threads before returning.
+ *
+ * @param lps_ptr       Pointer to the LPS structure containing cores.
+ * @param dct_index     Starting index for this DCT iteration.
+ * @param thread_number Number of worker threads to spawn.
+ *
+ * @return 0 on success.
+ * @return -1 on allocation failure.
+ */
+static int run_parallel_sweep(struct lps *lps_ptr, int dct_index, int thread_number) {
+
+    const int total = (int)lps_ptr->size - dct_index;   // number of pairs (i, i+1)
+    if (total <= 0) return 0;                               // nothing to do
+    const int chunk = (total + thread_number - 1) / thread_number;
+
+    pthread_t *threads = (pthread_t *)malloc(sizeof(pthread_t) * thread_number);
+    dct_worker_args_t *args = (dct_worker_args_t *)malloc(sizeof(dct_worker_args_t) * thread_number);
+
+    if (!threads || !args) {
+        perror("LCP: couldn't allocate thread arguments\n");
+        return -1;
+    }
+
+    for (int t = 0; t < thread_number; t++) {
+        int begin = dct_index + t * chunk;
+        int end = ((begin + chunk) <= lps_ptr->size ? (begin + chunk) : lps_ptr->size);
+
+        args[t].cores = lps_ptr->cores;
+        args[t].offset_begin = begin;
+        args[t].offset_end = end;
+
+        if ((int)lps_ptr->size <= begin || end <=begin) {
+            args[t].flags = -1;
+        } else if (begin != dct_index) {
+            args[t].dummy_left = lps_ptr->cores[begin-1];
+            args[t].flags = 2 + (lps_ptr->level == 1 ? 1 : 0);
+        } else {
+            args[t].flags = (lps_ptr->level == 1 ? 1 : 0);
+        }
+
+        pthread_create(&threads[t], NULL, dct_worker, &args[t]);
+    }
+
+    for (int t = 0; t < thread_number; t++) {
+        pthread_join(threads[t], NULL);
+    }
+
+    free(threads);
+    free(args);
+    return 0;
+}
+
+/**
+ * @brief Performs multi-iteration parallel Deterministic Coin Tossing (DCT).
+ *
+ * This function executes DCT_ITERATION_COUNT consecutive compression
+ * sweeps over the cores stored in `lps_ptr`, using parallel execution
+ * for each sweep.
+ *
+ * Each iteration reduces redundancy by compressing adjacent core pairs.
+ * The process prepares the core sequence for subsequent parsing stages
+ * in the LCP framework.
+ *
+ * Preconditions:
+ * - At least DCT_ITERATION_COUNT + 1 cores must be available.
+ *
+ * @param lps_ptr       Pointer to the LPS structure.
+ * @param thread_number Number of worker threads per sweep.
+ *
+ * @return 0 on success.
+ * @return -1 if there are not enough cores for DCT.
+ * @return Propagates non-zero errors from run_parallel_sweep().
+ */
+int lcp_dct_parallel(struct lps *lps_ptr, int thread_number) {
+    // at least 2 cores are needed for compression
+    if (lps_ptr->size < DCT_ITERATION_COUNT + 1) {
+        return -1;
+    }
+
+    for (int dct_index = 0; dct_index < DCT_ITERATION_COUNT; dct_index++) {
+        int rc = run_parallel_sweep(lps_ptr, dct_index, thread_number);
+        if (rc != 0) {
+            return rc;
+        }
+    }
+
+    return 0;
+}
+
+/**
+ * @brief Performs a single LPS deepening step using parallel DCT.
+ *
+ * This function advances the LPS structure by one level:
+ *
+ * 1. Executes parallel DCT compression.
+ * 2. Parses the resulting cores using parse3() to identify new cores.
+ * 3. Updates the core array and shrinks it via realloc().
+ * 4. Increments the LPS level.
+ *
+ * If DCT cannot be performed (insufficient cores),
+ * the structure is reset (size = 0) and the level is still incremented.
+ *
+ * @param lps_ptr       Pointer to the LPS structure to update.
+ * @param thread_number Number of worker threads used during DCT.
+ *
+ * @return 1 if deepening produced a valid new level.
+ * @return 0 if no further deepening was possible.
+ */
+int lps_deepen1_parallel(struct lps *lps_ptr, int thread_number) {
+
+    // compress cores
+    if (lcp_dct_parallel(lps_ptr, thread_number) < 0) {
+        lps_ptr->size = 0;
+        lps_ptr->level++;
+        return 0;
+    }
+
+    // find new cores
+    int new_size = parse3(lps_ptr->cores + DCT_ITERATION_COUNT, lps_ptr->cores + lps_ptr->size, lps_ptr->cores);
+    int temp = new_size;
+
+    // remove old cores
+    while(temp < lps_ptr->size) {
+        temp++;
+    }
+    lps_ptr->size = new_size;
+
+    lps_ptr->level++;
+
+    if (lps_ptr->size)
+        lps_ptr->cores = (struct core*)realloc(lps_ptr->cores, lps_ptr->size * sizeof(struct core));
+
+    return 1;
+}
+
+/**
+ * @brief Deepens the LPS structure up to a target LCP level.
+ *
+ * Repeatedly invokes lps_deepen1_parallel() until either:
+ * - The desired `lcp_level` is reached, or
+ * - Further deepening is no longer possible.
+ *
+ * If the current level already satisfies the requested level,
+ * no work is performed.
+ *
+ * @param lps_ptr       Pointer to the LPS structure.
+ * @param lcp_level     Target LCP level to reach.
+ * @param thread_number Number of worker threads used per deepening step.
+ *
+ * @return 1 if processing completed (even if stopped early).
+ * @return 0 if no deepening was required.
+ */
+int lps_deepen_parallel(struct lps *lps_ptr, int lcp_level, int thread_number) {
+
+    if (lcp_level <= lps_ptr->level)
+        return 0;
+
+    while (lps_ptr->level < lcp_level && lps_deepen1_parallel(lps_ptr, thread_number))
         ;
 
     return 1;
@@ -1268,7 +1779,7 @@ uint32_t MurmurHash3_32(const void *key, int len, uint32_t seed) {
         k1 *= c2;
 
         h1 ^= k1;
-        h1 = (h1 << 15) | (h1 >> (32 - 15));
+        h1 = (h1 << 15) | (h1 >> (32 - 15)); // it should be (h1 << 13) | (h1 >> (32 - 13)) but left at it is, let it be a legacy :)
         h1 = h1 * 5 + 0xe6546b64;
     }
 
@@ -1363,82 +1874,6 @@ void init_core4(struct core *cr, ubit_size bit_size, uint64_t bit_rep, ulabel la
     cr->end = end;
 }
 
-void core_compress(const struct core *left_core, struct core *right_core) {
-    if (left_core->bit_rep & 0x8000000000000000) { // if compressing 1-level cores
-        uint64_t left_core_3 = (left_core->bit_rep) & 3;
-        uint64_t left_core_2 = (left_core->bit_rep >> 2) & 3;
-        uint64_t left_core_middle_count = (left_core->bit_rep & 0x7FFFFFFFFFFFFFFF) >> 6;
-        uint64_t left_core_1 = (left_core->bit_rep >> 4) & 3;
-
-        uint64_t right_core_3 = (right_core->bit_rep) & 3;
-        uint64_t right_core_2 = (right_core->bit_rep >> 2) & 3;
-        uint64_t right_core_middle_count = (right_core->bit_rep & 0x7FFFFFFFFFFFFFFF) >> 6;
-        uint64_t right_core_1 = (right_core->bit_rep >> 4) & 3;
-
-        if (left_core_3 != right_core_3) { // if right characters mismatches
-            if ((left_core_3 & 1) != (right_core_3 & 1)) {
-                right_core->bit_rep = (right_core_3 & 1); // 0b00 + r % 2
-            } else {
-                right_core->bit_rep = 2 + ((right_core_3 >> 1) & 1); // 0b10 + r % 2
-            }
-            right_core->bit_size = 2;
-        }
-        else if (left_core_2 != right_core_2) { // if middle characters mismatches
-            if ((left_core_2 & 1) != (right_core_2 & 1)) {
-                right_core->bit_rep = 4 + (right_core_2 & 1); // 0b100 + r % 2
-            } else {
-                right_core->bit_rep = 6 + ((right_core_2 >> 1) & 1); // 0b110 + r % 2
-            }
-            right_core->bit_size = (64 - __builtin_clzll(right_core->bit_rep));
-        }
-        else if (left_core_middle_count != right_core_middle_count) { // middle character counts mismatches
-            if (left_core_middle_count < right_core_middle_count) {
-                // compare left_core_1 with right_core_2
-                if ((left_core_1 & 1) != (right_core_2 & 1)) {
-                    right_core->bit_rep = 4 * (left_core_middle_count + 1) + (right_core_2 & 1); // 2 * 2 * (mid + 1) + r % 2
-                } else {
-                    right_core->bit_rep = 2 * (2 * (left_core_middle_count + 1) + 1) + ((right_core_2 >> 1) & 1); // 2 * (2 * (mid + 1) + 1) + r % 2
-                }
-                right_core->bit_size = (64 - __builtin_clzll(right_core->bit_rep));
-            } else {
-                // compare left_core_2 with right_core_1
-                if ((left_core_2 & 1) != (right_core_1 & 1)) {
-                    right_core->bit_rep = 4 * (right_core_middle_count + 1) + (right_core_1 & 1);
-                } else {
-                    right_core->bit_rep = 2 * (2 * (right_core_middle_count + 1) + 1) + ((right_core_1 >> 1) & 1);
-                }
-                right_core->bit_size = (64 - __builtin_clzll(right_core->bit_rep));
-            }
-        }
-        else if (left_core_1 != right_core_1) { // left characters mismatches
-            if ((left_core_1 & 1) != (right_core_1 & 1)) {
-                right_core->bit_rep = 4 * (left_core_middle_count + 1) + (right_core_1 & 1);
-            } else {
-                right_core->bit_rep = 2 * (2 * (left_core_middle_count + 1) + 1) + ((right_core_1 >> 1) & 1);
-            }
-            right_core->bit_size = (64 - __builtin_clzll(right_core->bit_rep));
-        }
-        else { // they are same
-            right_core->bit_rep = 2 * right_core->bit_size;
-            right_core->bit_size = (64 - __builtin_clzll(right_core->bit_rep));
-        }
-    } else { // if compressing upper level (>1) cores
-        ubit_size first_differing_index = 64;
-        if (left_core->bit_rep != right_core->bit_rep) {
-            first_differing_index = __builtin_ctzll(left_core->bit_rep ^ right_core->bit_rep); // trailing zero count (0-index)
-        } else {
-            first_differing_index = right_core->bit_size;
-        }
-        first_differing_index = minimum(first_differing_index, minimum(left_core->bit_size, right_core->bit_size));
-        right_core->bit_rep = 2 * first_differing_index + ((right_core->bit_rep >> first_differing_index) & 1);
-        right_core->bit_size = right_core->bit_rep == 0 ? 2 : (64 - __builtin_clzll(right_core->bit_rep));
-        right_core->bit_size = right_core->bit_size < 2 ? 2 : right_core->bit_size;
-    }
-
-    // now, the right core is dependent on the left; hence, its coverage spans towards the left
-    right_core->start = left_core->start;
-}
-
 void print_core(const struct core *cr) {
     if (cr->bit_rep & 0x8000000000000000) { // if printing 1-level cores
         uint64_t middle_count = (0x7FFFFFFFFFFFFFFF & cr->bit_rep) >> 6;
@@ -1457,32 +1892,6 @@ void print_core(const struct core *cr) {
         }
         printf("%" PRIu64, (cr->bit_rep & 1));
     }
-}
-
-// core comparison operator implementation
-
-int core_eq(const struct core *lhs, const struct core *rhs) {
-    return lhs->bit_rep == rhs->bit_rep;
-}
-
-int core_neq(const struct core *lhs, const struct core *rhs) {
-    return lhs->bit_rep != rhs->bit_rep;
-}
-
-int core_gt(const struct core *lhs, const struct core *rhs) {
-    return lhs->bit_rep > rhs->bit_rep;
-}
-
-int core_lt(const struct core *lhs, const struct core *rhs) {
-    return lhs->bit_rep < rhs->bit_rep;
-}
-
-int core_geq(const struct core *lhs, const struct core *rhs) {
-    return lhs->bit_rep >= rhs->bit_rep;
-}
-
-int core_leq(const struct core *lhs, const struct core *rhs) {
-    return lhs->bit_rep <= rhs->bit_rep;
 }
 #endif
 #endif

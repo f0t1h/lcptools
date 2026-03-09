@@ -30,7 +30,7 @@ LIB_DIR = $(ABS_PREFIX)/lib
 .PHONY: all clean install uninstall test header_only
 
 header_only: $(HDR) $(SRC)
-	sh ./gen_header_only.sh 
+	sh ./gen_header_only.sh
 
 install: clean $(STATIC) $(DYNAMIC) lcptools
 	mkdir -p $(INCLUDE_DIR)
@@ -48,7 +48,7 @@ uninstall:
 	done
 
 clean:
-	rm -f $(TEST_DIR)/*.o 
+	rm -f $(TEST_DIR)/*.o
 	@echo "rm $(LIB_DIR)/$(STATIC)";
 	@if [ -f "$(LIB_DIR)/$(STATIC)" ]; then \
 		rm -f $(LIB_DIR)/$(STATIC) || \
@@ -65,8 +65,8 @@ clean:
 				exit 1; \
 			}; \
 	fi
-	rm -f $(OBJ_STATIC) 
-	rm -f $(OBJ_DYNAMIC) 
+	rm -f $(OBJ_STATIC)
+	rm -f $(OBJ_DYNAMIC)
 	rm -f lcptools
 
 # target for static library
@@ -111,7 +111,7 @@ test:
 	@echo "Running tests..."
 	@for test in $(TESTS); do \
 		echo "Compiling $$test.cpp..."; \
-		g++ $(CXXFLAGS) -I$(INCLUDE_DIR) -o tests/$$test tests/$$test.cpp -L$(LIB_DIR) -l$(LIB_NAME) -Wl,-rpath,$(LIB_DIR); \
+		g++ $(CXXFLAGS) -I$(INCLUDE_DIR) -o tests/$$test tests/$$test.cpp; \
 		if [ $$? -ne 0 ]; then \
 			echo "Compilation failed for $$test.c"; \
 			exit 1; \
