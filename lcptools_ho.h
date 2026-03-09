@@ -432,7 +432,7 @@ extern "C" {
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h> 
+#include <stdint.h>
 
 #define DCT_ITERATION_COUNT 1
 
@@ -441,35 +441,31 @@ extern "C" {
 typedef uint32_t ubit_size;
 typedef uint32_t ulabel;
 
+typedef struct {
+    uint64_t x;
+    uint64_t y;
+} uint128_t;
+#if defined(__cplusplus)
+    #define CL(type)      type
+#else
+    #define CL(type)      (type)
+#endif
+
+
 struct core {
     ubit_size bit_size;
-    uint64_t bit_rep;
+    uint128_t bit_rep;
     ulabel label;
     uint64_t start;
     uint64_t end;
 };
 
-
-/**
- * @brief Computes the 32-bit MurmurHash3 hash for a given key.
- *
- * This function computes a 32-bit hash of the input data 'key' with the
- * specified length 'len' and an optional seed value. It processes the
- * input in blocks and handles any remaining bytes.
- *
- * @param key Pointer to the data to be hashed.
- * @param len The length of the data in bytes.
- * @param seed An initial seed value for the hash computation.
- * @return The resulting 32-bit hash value.
- */
-uint32_t MurmurHash3_32(const void *key, int len, uint32_t seed) ;
-
 /**
  * @brief Initializes a core structure with the provided string data and index range.
- * 
- * This function processes a given substring starting at `begin` with a specified 
+ *
+ * This function processes a given substring starting at `begin` with a specified
  * distance (length of the substring) and assigns start and end indices for tracking.
- * 
+ *
  * @param cr Pointer to the core structure to initialize.
  * @param begin Pointer to the start of the string data.
  * @param distance Length of the substring to process.
@@ -480,10 +476,10 @@ void init_core1(struct core *cr, const char *begin, uint64_t distance, uint64_t 
 
 /**
  * @brief Initializes a core structure with the provided string data and index range.
- * 
+ *
  * Similar to `init_core1`, but initalizes the core structure with reverse complement
  * alphabet encoding.
- * 
+ *
  * @param cr Pointer to the core structure to initialize.
  * @param begin Pointer to the start of the string data.
  * @param distance Length of the substring to process.
@@ -494,11 +490,11 @@ void init_core2(struct core *cr, const char *begin, uint64_t distance, uint64_t 
 
 /**
  * @brief Initializes a core structure by combining data from other core structures.
- * 
- * This function initializes a new core structure (`cr`) using a sequence of 
- * `core` objects starting from `begin` with the specified `distance` (number 
+ *
+ * This function initializes a new core structure (`cr`) using a sequence of
+ * `core` objects starting from `begin` with the specified `distance` (number
  * of `core` objects to process).
- * 
+ *
  * @param cr Pointer to the core structure to initialize.
  * @param begin Pointer to the start of the sequence of core structures.
  * @param distance Number of core structures to process in the sequence.
@@ -507,11 +503,11 @@ void init_core3(struct core *cr, struct core *begin, uint64_t distance);
 
 /**
  * @brief Directly initializes a core structure with precomputed representation and metadata.
- * 
- * This function allows the initialization of a core structure when the bit 
- * representation, bit size, and label are already computed. Useful for 
+ *
+ * This function allows the initialization of a core structure when the bit
+ * representation, bit size, and label are already computed. Useful for
  * deserializing or cloning a core structure.
- * 
+ *
  * @param cr Pointer to the core structure to initialize.
  * @param bit_size Size of the bit representation in bits.
  * @param bit_rep Pointer to the precomputed bit representation array.
@@ -556,7 +552,7 @@ void print_core(const struct core *cr);
  * @return 1 if the two objects are equal, 0 otherwise.
  */
 static inline int core_eq(const struct core *lhs, const struct core *rhs) {
-    return lhs->bit_rep == rhs->bit_rep;
+    return lhs->bit_rep.x == rhs->bit_rep.x && lhs->bit_rep.y == rhs->bit_rep.y;
 }
 
 /**
@@ -568,7 +564,7 @@ static inline int core_eq(const struct core *lhs, const struct core *rhs) {
  * @return 1 if the left-hand object is greater, 0 otherwise.
  */
 static inline int core_neq(const struct core *lhs, const struct core *rhs) {
-    return lhs->bit_rep != rhs->bit_rep;
+    return lhs->bit_rep.x != rhs->bit_rep.x || lhs->bit_rep.y != rhs->bit_rep.y;
 }
 
 /**
@@ -580,7 +576,7 @@ static inline int core_neq(const struct core *lhs, const struct core *rhs) {
  * @return 1 if the left-hand object is smaller, 0 otherwise.
  */
 static inline int core_gt(const struct core *lhs, const struct core *rhs) {
-    return lhs->bit_rep > rhs->bit_rep;
+    return lhs->bit_rep.x > rhs->bit_rep.x || (lhs->bit_rep.x == rhs->bit_rep.x && lhs->bit_rep.y > rhs->bit_rep.y);
 }
 
 /**
@@ -592,7 +588,7 @@ static inline int core_gt(const struct core *lhs, const struct core *rhs) {
  * @return 1 if the two objects are not equal, 0 otherwise.
  */
 static inline int core_lt(const struct core *lhs, const struct core *rhs) {
-    return lhs->bit_rep < rhs->bit_rep;
+    return lhs->bit_rep.x < rhs->bit_rep.x || (lhs->bit_rep.x == rhs->bit_rep.x && lhs->bit_rep.y < rhs->bit_rep.y);
 }
 
 /**
@@ -604,7 +600,7 @@ static inline int core_lt(const struct core *lhs, const struct core *rhs) {
  * @return 1 if the left-hand object is greater than or equal, 0 otherwise.
  */
 static inline int core_geq(const struct core *lhs, const struct core *rhs) {
-    return lhs->bit_rep >= rhs->bit_rep;
+    return lhs->bit_rep.x >= rhs->bit_rep.x || (lhs->bit_rep.x == rhs->bit_rep.x && lhs->bit_rep.y >= rhs->bit_rep.y);
 }
 
 /**
@@ -616,7 +612,7 @@ static inline int core_geq(const struct core *lhs, const struct core *rhs) {
  * @return 1 if the left-hand object is smaller than or equal, 0 otherwise.
  */
 static inline int core_leq(const struct core *lhs, const struct core *rhs) {
-    return lhs->bit_rep <= rhs->bit_rep;
+    return lhs->bit_rep.x <= rhs->bit_rep.x || (lhs->bit_rep.x == rhs->bit_rep.x && lhs->bit_rep.y <= rhs->bit_rep.y);
 }
 
 /**
@@ -626,23 +622,25 @@ static inline int core_leq(const struct core *lhs, const struct core *rhs) {
  * @param b Second value.
  * @return The smaller of a and b.
  */
-static inline ubit_size umin(ubit_size a, ubit_size b) { 
-    return a < b ? a : b; 
+static inline ubit_size umin(ubit_size a, ubit_size b) {
+    return a < b ? a : b;
 }
 
 /**
- * @brief Compute the bit-length of a 64-bit unsigned integer.
+ * @brief Compute the bit-length of a 128-bit unsigned integer.
  *
  * Bit-length is defined as the position of the most significant set bit
  * (1-based). Returns 0 if x == 0.
  *
  * Uses __builtin_clzll for efficient leading-zero counting.
  *
- * @param x Input 64-bit unsigned integer.
+ * @param x Input 128-bit unsigned integer.
  * @return Number of significant bits required to represent x.
  */
-static inline ubit_size bitlen_u64(uint64_t x) {
-    return x ? (ubit_size)(64u - (ubit_size)__builtin_clzll(x)) : 0u;
+static inline ubit_size bitlen_u128(uint128_t x) {
+    return x.x ?
+    ((ubit_size)(64u - (ubit_size)__builtin_clzll(x.x)) + 64) :
+    ( x.y ? (ubit_size)(64u - (ubit_size)__builtin_clzll(x.y)) : 0u);
 }
 
 /**
@@ -651,11 +649,11 @@ static inline ubit_size bitlen_u64(uint64_t x) {
  * Ensures the returned bit-length is at least 2, even if x has fewer
  * significant bits (or is zero).
  *
- * @param x Input 64-bit unsigned integer.
- * @return max(bitlen_u64(x), 2).
+ * @param x Input 128-bit unsigned integer.
+ * @return max(bitlen_u128(x), 2).
  */
-static inline ubit_size bitlen_min2(uint64_t x) {
-    ubit_size bl = bitlen_u64(x);
+static inline ubit_size bitlen_min2_128(uint128_t x) {
+    ubit_size bl = bitlen_u128(x);
     return bl < 2u ? 2u : bl;
 }
 
@@ -671,8 +669,8 @@ static inline ubit_size bitlen_min2(uint64_t x) {
  * @param k   Slot index (0–2).
  * @return The 2-bit symbol at slot k.
  */
-static inline uint64_t sym2(uint64_t rep, unsigned k) {
-    return k ? (rep >> k) & 3ull : rep & 3ull;
+static inline uint128_t sym2_128(uint128_t rep, unsigned k) {
+    return k ? CL(uint128_t){0, (rep.y >> k) & 3ull} : CL(uint128_t){0, rep.y & 3ull};
 }
 
 /**
@@ -684,15 +682,15 @@ static inline uint64_t sym2(uint64_t rep, unsigned k) {
  * @param rep Packed representation.
  * @return Middle repetition count.
  */
-static inline uint64_t mid_count(uint64_t rep) {
-    return (rep & 0x7FFFFFFFFFFFFFFFull) >> 6;
+static inline uint64_t mid_count_128(uint128_t rep) {
+    return rep.y >> 6;
 }
 
 /**
  * @brief Emit an encoded index-bit value based on symbol comparison.
  *
  * Computes:
- *   result = i + selected_bit or 2 + i + selected_bit, depending on 
+ *   result = i + selected_bit or 2 + i + selected_bit, depending on
  *  from where the bit is selected
  *
  * If the least significant bits of a2 and b2 differ, select (b2 & 1).
@@ -703,11 +701,11 @@ static inline uint64_t mid_count(uint64_t rep) {
  * @param i  Base index multiplier.
  * @return Encoded value 2 + i plus chosen bit from b2.
  */
-static inline uint64_t emit_idx_bit(uint64_t a2, uint64_t b2, uint64_t i) {
-    if ((a2 & 1) != (b2 & 1)) {
-        return i + (b2 & 1);
+static inline uint128_t emit_idx_bit_128(uint128_t a2, uint128_t b2, uint64_t i) {
+    if ((a2.y & 1) != (b2.y & 1)) {
+        return CL(uint128_t){0, i + (b2.y & 1)};
     }
-    return 2 + i + ((b2 >> 1) & 1);
+    return CL(uint128_t){0, 2 + i + ((b2.y >> 1) & 1)};
 }
 
 /**
@@ -745,52 +743,52 @@ static inline uint64_t emit_idx_bit(uint64_t a2, uint64_t b2, uint64_t i) {
  * @param right  Pointer to right core (level-1 encoded, updated in place).
  */
 static inline void core_compress_level1(const struct core *left, struct core *right) {
-    uint64_t L = left->bit_rep;
-    uint64_t R = right->bit_rep;
+    uint128_t L = left->bit_rep;
+    uint128_t R = right->bit_rep;
 
-    uint64_t L3 = sym2(L, 0), L2 = sym2(L, 2), L1 = sym2(L, 4);
-    uint64_t R3 = sym2(R, 0), R2 = sym2(R, 2), R1 = sym2(R, 4);
+    uint128_t L3 = sym2_128(L, 0), L2 = sym2_128(L, 2), L1 = sym2_128(L, 4);
+    uint128_t R3 = sym2_128(R, 0), R2 = sym2_128(R, 2), R1 = sym2_128(R, 4);
 
-    uint64_t Lm = mid_count(L);
-    uint64_t Rm = mid_count(R);
+    uint64_t Lm = mid_count_128(L);
+    uint64_t Rm = mid_count_128(R);
 
-    uint64_t out;
+    uint128_t out;
 
-    if (L3 != R3) {
+    if (L3.y != R3.y) {
         // base = 0 (2*i with i=0)
-        out = emit_idx_bit(L3, R3, 0);
+        out = emit_idx_bit_128(L3, R3, 0);
         right->bit_rep = out;
-        right->bit_size = 2;        
+        right->bit_size = 2;
     }
-    else if (L2 != R2) {
+    else if (L2.y != R2.y) {
         // Your original used base=4/6 -> i=2 (since 2*i = 4)
-        out = emit_idx_bit(L2, R2, 4);
+        out = emit_idx_bit_128(L2, R2, 4);
         right->bit_rep = out;
-        right->bit_size = bitlen_min2(out);
+        right->bit_size = bitlen_min2_128(out);
     }
     else if (Lm != Rm) {
         // Preserve your “compare across boundary depending on which count is smaller”
         if (Lm < Rm) {
             // compare left L1 with right R2; index = Lm + 1
-            out = emit_idx_bit(L1, R2, 4 * Lm + 4);
+            out = emit_idx_bit_128(L1, R2, 4 * Lm + 4);
         } else {
             // compare left L2 with right R1; index = Rm + 1
-            out = emit_idx_bit(L2, R1, 4 * Rm + 4);
+            out = emit_idx_bit_128(L2, R1, 4 * Rm + 4);
         }
         right->bit_rep = out;
-        right->bit_size = bitlen_min2(out);
+        right->bit_size = bitlen_min2_128(out);
     }
-    else if (L1 != R1) {
+    else if (L1.y != R1.y) {
         // left mismatch: index = Lm + 1
-        out = emit_idx_bit(L1, R1, 4 * Lm + 4);
+        out = emit_idx_bit_128(L1, R1, 4 * Lm + 4);
         right->bit_rep = out;
-        right->bit_size = bitlen_min2(out);
+        right->bit_size = bitlen_min2_128(out);
     }
     else {
         // same
-        out = 2ull * (uint64_t)right->bit_size;
+        out = CL(uint128_t){0, 2ull * (uint64_t)right->bit_size};
         right->bit_rep = out;
-        right->bit_size = bitlen_min2(out);
+        right->bit_size = bitlen_min2_128(out);
     }
 
     right->start = left->start;
@@ -836,17 +834,24 @@ static inline void core_compress_upper(const struct core *left, struct core *rig
     ubit_size bound = umin(right->bit_size, umin(left->bit_size, 64u));
 
     ubit_size idx;
-    if (left->bit_rep == right->bit_rep) {
+    if (left->bit_rep.x == right->bit_rep.x && left->bit_rep.y == right->bit_rep.y) {
         idx = bound;
     } else {
-        uint64_t x = left->bit_rep ^ right->bit_rep;   // nonzero here
-        idx = (ubit_size)__builtin_ctzll(x);
-        idx = umin(idx, bound);
+        if (left->bit_rep.y == right->bit_rep.y) {
+            printf("here\n");
+            uint64_t x = left->bit_rep.x ^ right->bit_rep.x;   // nonzero here
+            idx = (ubit_size)__builtin_ctzll(x) + 63;
+            idx = umin(idx, bound);
+        } else {
+            uint64_t x = left->bit_rep.y ^ right->bit_rep.y;   // nonzero here
+            idx = (ubit_size)__builtin_ctzll(x);
+            idx = umin(idx, bound);
+        }
     }
 
-    uint64_t out = 2ull * (uint64_t)idx + ((right->bit_rep >> idx) & 1ull);
+    uint128_t out = CL(uint128_t){0, 2ull * (uint64_t)idx + (( idx > 63 ? right->bit_rep.x >> (idx - 63) : right->bit_rep.y >> idx) & 1ull)};
     right->bit_rep = out;
-    right->bit_size = bitlen_min2(out);
+    right->bit_size = bitlen_min2_128(out);
     right->start = left->start;
 }
 
@@ -1823,7 +1828,7 @@ void init_core1(struct core *cr, const char *begin, uint64_t distance, uint64_t 
     cr->label |= (alphabet[(int)(*begin)] << 4);
     cr->label |= (alphabet[(int)(*(begin+distance-2))] << 2);
     cr->label |= (alphabet[(int)(*(begin+distance-1))]);
-    cr->bit_rep = 0x8000000000000000 | cr->label;
+    cr->bit_rep = CL(uint128_t){0x8000000000000000, cr->label};
     cr->bit_size = 2 * distance;
 }
 
@@ -1835,14 +1840,14 @@ void init_core2(struct core *cr, const char *begin, uint64_t distance, uint64_t 
     cr->label |= (rc_alphabet[(int)(*(begin))] << 4);
     cr->label |= (rc_alphabet[(int)(*(begin-distance+2))] << 2);
     cr->label |= (rc_alphabet[(int)(*(begin-distance+1))]);
-    cr->bit_rep = 0x8000000000000000 | cr->label;
+    cr->bit_rep = CL(uint128_t){0x8000000000000000, cr->label};
     cr->bit_size = 2 * distance;
 }
 
 void init_core3(struct core *cr, struct core *begin, uint64_t distance) {
     cr->start = begin->start;
     cr->end = (begin+distance-1)->end;
-    cr->bit_rep = 0;
+    cr->bit_rep = CL(uint128_t){0, 0};
     cr->bit_size = 0;
 
     for (struct core *it=begin; it<begin+distance; it++) {
@@ -1850,13 +1855,22 @@ void init_core3(struct core *cr, struct core *begin, uint64_t distance) {
     }
 
     int index = 0;
-    for (struct core *it = begin+distance-1; begin <= it && index + it->bit_size <= 64; it--) {
-        cr->bit_rep |= (it->bit_rep << index);
+    for (struct core *it = begin + distance - 1; begin <= it && index + it->bit_size <= 128; it--) {
+        uint64_t lx = it->bit_rep.x;
+        uint64_t ly = it->bit_rep.y;
+
+        if (index < 64) {
+            cr->bit_rep.x |= lx << index;
+            cr->bit_rep.y |= (ly << index) | (lx >> (64 - index));
+        } else {
+            cr->bit_rep.y |= lx << (index - 64);
+        }
+
         index += it->bit_size;
     }
 
-    cr->bit_rep = 0x7FFFFFFFFFFFFFFF & cr->bit_rep;
-    cr->bit_size = minimum(cr->bit_size, 63);
+    cr->bit_rep.x = 0x7FFFFFFFFFFFFFFF & cr->bit_rep.x;
+    cr->bit_size = minimum(cr->bit_size, 123);
 
     ulabel data[4];
     data[0] = (begin)->label;
@@ -1868,29 +1882,32 @@ void init_core3(struct core *cr, struct core *begin, uint64_t distance) {
 
 void init_core4(struct core *cr, ubit_size bit_size, uint64_t bit_rep, ulabel label, uint64_t start, uint64_t end) {
     cr->bit_size = bit_size;
-    cr->bit_rep = bit_rep;
+    cr->bit_rep = CL(uint128_t){0, bit_rep};
     cr->label = label;
     cr->start = start;
     cr->end = end;
 }
 
 void print_core(const struct core *cr) {
-    if (cr->bit_rep & 0x8000000000000000) { // if printing 1-level cores
-        uint64_t middle_count = (0x7FFFFFFFFFFFFFFF & cr->bit_rep) >> 6;
-        uint64_t middle_val = (cr->bit_rep >> 2) & 3;
-        printf("%" PRIu64, ((cr->bit_rep >> 5) & 1));
-        printf("%" PRIu64, ((cr->bit_rep >> 4) & 1));
+    if (cr->bit_rep.x & 0x8000000000000000) { // if printing 1-level cores
+        uint64_t middle_count = (cr->bit_rep.y) >> 6;
+        uint64_t middle_val = (cr->bit_rep.y >> 2) & 3;
+        printf("%" PRIu64, (uint64_t)((cr->bit_rep.y >> 5) & 1));
+        printf("%" PRIu64, (uint64_t)((cr->bit_rep.y >> 4) & 1));
         for (uint64_t i=0; i<middle_count; i++) {
-            printf("%" PRIu64, ((middle_val >> 1) & 1));
-            printf("%" PRIu64, (middle_val & 1));
+            printf("%" PRIu64, (uint64_t)((middle_val >> 1) & 1));
+            printf("%" PRIu64, (uint64_t)(middle_val & 1));
         }
-        printf("%" PRIu64, ((cr->bit_rep >> 1) & 1));
-        printf("%" PRIu64, (cr->bit_rep & 1));
+        printf("%" PRIu64, (uint64_t)((cr->bit_rep.y >> 1) & 1));
+        printf("%" PRIu64, (uint64_t)(cr->bit_rep.y & 1));
     } else {
-        for (ubit_size index = cr->bit_size - 1; 0 < index; index--) {
-            printf("%" PRIu64, ((cr->bit_rep >> index) & 1));
+        for (ubit_size index = cr->bit_size - 1; 63 < index; index--) {
+            printf("%" PRIu64, (uint64_t)((cr->bit_rep.x >> index) & 1));
         }
-        printf("%" PRIu64, (cr->bit_rep & 1));
+        for (ubit_size index = cr->bit_size - 1; 0 < index; index--) {
+            printf("%" PRIu64, (uint64_t)((cr->bit_rep.y >> index) & 1));
+        }
+        printf("%" PRIu64, (uint64_t)(cr->bit_rep.y & 1));
     }
 }
 #endif
