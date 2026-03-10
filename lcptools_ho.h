@@ -71,7 +71,7 @@ struct lps {
 
 /**
  * @brief Constructs an lps object from a string.
- * 
+ *
  * @param lps_ptr The `lps` object that will be initialized
  * @param str The input string to be parsed.
  * @param len The length of the string to be parsed.
@@ -80,7 +80,7 @@ void init_lps(struct lps *lps_ptr, const char *str, int len);
 
 /**
  * @brief Constructs an lps object from a string.
- * 
+ *
  * @param lps_ptr The `lps` object that will be initialized
  * @param str The input string to be parsed.
  * @param len The length of the string to be parsed.
@@ -91,7 +91,7 @@ void init_lps_offset(struct lps *lps_ptr, const char *str, int len, uint64_t off
 /**
  * @brief Constructs an lps object from a string, with reverse complement
  * transformation.
- * 
+ *
  * @param lps_ptr The `lps` object that will be initialized
  * @param str The input string to be parsed.
  * @param len The length of the string to be parsed.
@@ -100,16 +100,16 @@ void init_lps2(struct lps *lps_ptr, const char *str, int len);
 /**
  * @brief Initializes an lps object by reading its contents from a binary file.
  *
- * This function reads the level and size of the `lps` object from the provided file, 
- * allocates memory for the cores array if necessary, and then reads each core's data. 
- * If any error occurs during reading, it will print an error message and terminate 
+ * This function reads the level and size of the `lps` object from the provided file,
+ * allocates memory for the cores array if necessary, and then reads each core's data.
+ * If any error occurs during reading, it will print an error message and terminate
  * the program or return control, depending on error-handling strategy.
  *
  * @param lps_ptr The `lps` object that will be initialized
  * @param in File pointer to the binary file containing the serialized lps data.
- * 
- * @note The caller must ensure that the `FILE *in` is a valid and open binary file 
- *       for reading. The function will allocate memory for `lps_ptr->cores` if 
+ *
+ * @note The caller must ensure that the `FILE *in` is a valid and open binary file
+ *       for reading. The function will allocate memory for `lps_ptr->cores` if
  *       `lps_ptr->size > 0`. The caller is responsible for freeing this memory later.
  */
 void init_lps3(struct lps *lps_ptr, FILE *in);
@@ -118,7 +118,7 @@ void init_lps3(struct lps *lps_ptr, FILE *in);
  * @brief Constructs an lps object from a string, using split and merge paradigm.
  * The give string will be roughly split into the length of `chunk_size`
  * and processed independently. The final cores will be merged into a single array.
- * 
+ *
  * @param lps_ptr The `lps` object that will be initialized
  * @param str The input string to be parsed.
  * @param len The length of the string to be parsed.
@@ -134,21 +134,21 @@ void free_lps(struct lps *lps_ptr);
 /**
  * @brief Serializes and writes an lps object to a binary file.
  *
- * This function writes the level, size, and all core objects of the `lps` object 
- * to the specified binary file. Each core's data, including its bit representation, 
- * is written sequentially to the file. The resulting file can later be read to 
+ * This function writes the level, size, and all core objects of the `lps` object
+ * to the specified binary file. Each core's data, including its bit representation,
+ * is written sequentially to the file. The resulting file can later be read to
  * reconstruct the `lps` object.
  *
  * @param lps_ptr The `lps` object that will be initialized
  * @param out File pointer to the binary file where the lps data will be written.
- * 
- * @note The caller must ensure that the `FILE *out` is a valid and open binary file 
+ *
+ * @note The caller must ensure that the `FILE *out` is a valid and open binary file
  *       for writing. If the file cannot be written to, the function behavior is undefined.
  */
 void write_lps(struct lps *lps_ptr, FILE *out);
 
 /**
- * @brief Parses a sequence to extract Locally Consisted Parsing (LCP) cores and stores them in a 
+ * @brief Parses a sequence to extract Locally Consisted Parsing (LCP) cores and stores them in a
  * array of cores.
  *
  * This function iterates over a sequence defined by iterators `begin` and `end` and identifies key
@@ -165,12 +165,12 @@ void write_lps(struct lps *lps_ptr, FILE *out);
 int parse1(const char *begin, const char *end, struct core *cores, uint64_t offset);
 
 /**
- * @brief Parses a sequence to extract Locally Consisted Parsing (LCP) cores and stores them in a 
+ * @brief Parses a sequence to extract Locally Consisted Parsing (LCP) cores and stores them in a
  * array of cores using complement alphabet.
  *
  * This function iterates over a sequence defined by iterators `begin` and `end` and identifies key
  * segments, called "cores," that represent the (LCP) regions. By analyzing
- * character relationships in the sequence (such as equality or relative order based on complement), 
+ * character relationships in the sequence (such as equality or relative order based on complement),
  * it builds and stores these cores for further processing in the LCP framework.
  *
  * @param begin Iterator pointing to the beginning of the sequence to parse.
@@ -182,10 +182,10 @@ int parse1(const char *begin, const char *end, struct core *cores, uint64_t offs
 int parse2(const char *begin, const char *end, struct core *cores, uint64_t offset);
 
 /**
- * @brief Parses a array of cores to extract Locally Consisted Parsing (LCP) cores and stores them in a 
+ * @brief Parses a array of cores to extract Locally Consisted Parsing (LCP) cores and stores them in a
  * array of cores.
  *
- * This function iterates over a array of `core` structures defined by iterators `begin` and `end` and 
+ * This function iterates over a array of `core` structures defined by iterators `begin` and `end` and
  * identifies key segments, called "cores," that represent the (LCP) regions. By analyzing
  * `core` structure relationships in the array (such as equality or relative order), it builds and stores
  * these cores for further processing in the LCP framework.
@@ -223,7 +223,7 @@ int lps_deepen1(struct lps *lps_ptr);
 int lps_deepen(struct lps *lps_ptr, int lcp_level);
 
 /**
- * @brief Deepens the compression level of the LCP structure in parallel. This method 
+ * @brief Deepens the compression level of the LCP structure in parallel. This method
  * compresses the existing cores and finds new cores.
  *
  * @param lps_ptr The `lps` object that will be parsed over.
@@ -278,6 +278,13 @@ int lps_eq(const struct lps *lhs, const struct lps *rhs);
  */
 int lps_neq(const struct lps *lhs, const struct lps *rhs);
 
+
+/**
+ * @brief Clears the lps object.
+ *
+ * @param lps_ptr The `lps` object to be cleared.
+ */
+void lps_clear(struct lps *lps_ptr);
 
 #ifdef __cplusplus
 }
