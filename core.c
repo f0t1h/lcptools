@@ -124,22 +124,13 @@ void init_core3(struct core *cr, struct core *begin, uint64_t distance) {
     }
 
     int index = 0;
-    for (struct core *it = begin + distance - 1; begin <= it && index + it->bit_size <= 128; it--) {
-        uint64_t lx = it->bit_rep.x;
-        uint64_t ly = it->bit_rep.y;
-
-        if (index < 64) {
-            cr->bit_rep.x |= lx << index;
-            cr->bit_rep.y |= (ly << index) | (lx >> (64 - index));
-        } else {
-            cr->bit_rep.y |= lx << (index - 64);
-        }
-
+    for (struct core *it = begin+distance-1; begin <= it && index + it->bit_size <= 64; it--) {
+        cr->bit_rep.y |= (it->bit_rep.y << index);
         index += it->bit_size;
     }
 
     cr->bit_rep.x = 0x7FFFFFFFFFFFFFFF & cr->bit_rep.x;
-    cr->bit_size = minimum(cr->bit_size, 123);
+    cr->bit_size = minimum(cr->bit_size, 127);
 
     ulabel data[4];
     data[0] = (begin)->label;

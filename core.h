@@ -212,7 +212,7 @@ static inline int core_lt(const struct core *lhs, const struct core *rhs) {
  * @return 1 if the left-hand object is greater than or equal, 0 otherwise.
  */
 static inline int core_geq(const struct core *lhs, const struct core *rhs) {
-    return lhs->bit_rep.x >= rhs->bit_rep.x || (lhs->bit_rep.x == rhs->bit_rep.x && lhs->bit_rep.y >= rhs->bit_rep.y);
+    return lhs->bit_rep.x > rhs->bit_rep.x || (lhs->bit_rep.x == rhs->bit_rep.x && lhs->bit_rep.y >= rhs->bit_rep.y);
 }
 
 /**
@@ -224,7 +224,7 @@ static inline int core_geq(const struct core *lhs, const struct core *rhs) {
  * @return 1 if the left-hand object is smaller than or equal, 0 otherwise.
  */
 static inline int core_leq(const struct core *lhs, const struct core *rhs) {
-    return lhs->bit_rep.x <= rhs->bit_rep.x || (lhs->bit_rep.x == rhs->bit_rep.x && lhs->bit_rep.y <= rhs->bit_rep.y);
+    return lhs->bit_rep.x < rhs->bit_rep.x || (lhs->bit_rep.x == rhs->bit_rep.x && lhs->bit_rep.y <= rhs->bit_rep.y);
 }
 
 /**
@@ -450,7 +450,6 @@ static inline void core_compress_upper(const struct core *left, struct core *rig
         idx = bound;
     } else {
         if (left->bit_rep.y == right->bit_rep.y) {
-            printf("here\n");
             uint64_t x = left->bit_rep.x ^ right->bit_rep.x;   // nonzero here
             idx = (ubit_size)__builtin_ctzll(x) + 63;
             idx = umin(idx, bound);
