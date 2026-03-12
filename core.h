@@ -41,23 +41,26 @@ extern "C" {
 #endif
 
 #include "encoding.h"
-#include <string.h>
+#include "string.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h> 
 
-#define UBLOCK_BIT_SIZE 32
 #define DCT_ITERATION_COUNT 1
 
 #define minimum(a, b) ((a) < (b) ? (a) : (b))
 
-typedef unsigned int ublock;
 typedef uint32_t ubit_size;
 typedef uint32_t ulabel;
 
+typedef struct {
+    uint64_t x;
+    uint64_t y;
+} uint128_t;
+
 struct core {
     ubit_size bit_size;
-    ublock *bit_rep;
+    uint128_t bit_rep;
     ulabel label;
     uint64_t start;
     uint64_t end;
@@ -118,18 +121,7 @@ void init_core3(struct core *cr, struct core *begin, uint64_t distance);
  * @param start Start index of the substring or sequence represented by the core.
  * @param end End index of the substring or sequence represented by the core.
  */
-void init_core4(struct core *cr, ubit_size bit_size, ublock *bit_rep, ulabel label, uint64_t start, uint64_t end);
-
-/**
- * @brief Frees the allocated memory associated with a core structure.
- * 
- * This function ensures that all dynamically allocated resources (e.g., the bit 
- * representation array) associated with the given core structure are properly 
- * released, preventing memory leaks.
- * 
- * @param cr Pointer to the core structure to deallocate.
- */
-void free_core(struct core* cr);
+void init_core4(struct core *cr, ubit_size bit_size, uint64_t bit_rep, ulabel label, uint64_t start, uint64_t end);
 
 /**
  * @brief Compresses the right `core` object by comparing it with
@@ -143,16 +135,6 @@ void free_core(struct core* cr);
  * @param right_core The `core` object that will be compressed.
  */
 void core_compress(const struct core *left_core, struct core *right_core);
-
-/**
- * @brief Calculates the total memory size used by the `core` object.
- *
- * This function computes the memory used by the `core` object,
- * including the bit sequence and metadata.
- *
- * @return The total memory size in bytes.
- */
-uint64_t core_memsize(const struct core *cr);
 
 /**
  * @brief Output the bit representation of a `core` object.
@@ -175,7 +157,9 @@ void print_core(const struct core *cr);
  * @param rhs The right-hand side `core` object.
  * @return 1 if the two objects are equal, 0 otherwise.
  */
-int core_eq(const struct core *lhs, const struct core *rhs);
+static inline int core_eq(const struct core *lhs, const struct core *rhs) {
+    return lhs->bit_rep.x == rhs->bit_rep.x && lhs->bit_rep.y == rhs->bit_rep.y;
+}
 
 /**
  * @brief Operator overload for greater-than comparison between two `core`
@@ -185,7 +169,9 @@ int core_eq(const struct core *lhs, const struct core *rhs);
  * @param rhs The right-hand side `core` object.
  * @return 1 if the left-hand object is greater, 0 otherwise.
  */
-int core_neq(const struct core *lhs, const struct core *rhs);
+static inline int core_neq(const struct core *lhs, const struct core *rhs) {
+    return lhs->bit_rep.x != rhs->bit_rep.x || lhs->bit_rep.y != rhs->bit_rep.y;
+}
 
 /**
  * @brief Operator overload for smaller-than comparison between two `core`
@@ -195,7 +181,9 @@ int core_neq(const struct core *lhs, const struct core *rhs);
  * @param rhs The right-hand side `core` object.
  * @return 1 if the left-hand object is smaller, 0 otherwise.
  */
-int core_gt(const struct core *lhs, const struct core *rhs);
+static inline int core_gt(const struct core *lhs, const struct core *rhs) {
+    return lhs->bit_rep.x > rhs->bit_rep.x || (lhs->bit_rep.x == rhs->bit_rep.x && lhs->bit_rep.y > rhs->bit_rep.y);
+}
 
 /**
  * @brief Operator overload for not-equal-to comparison between two `core`
@@ -205,7 +193,9 @@ int core_gt(const struct core *lhs, const struct core *rhs);
  * @param rhs The right-hand side `core` object.
  * @return 1 if the two objects are not equal, 0 otherwise.
  */
-int core_lt(const struct core *lhs, const struct core *rhs);
+static inline int core_lt(const struct core *lhs, const struct core *rhs) {
+    return lhs->bit_rep.x < rhs->bit_rep.x || (lhs->bit_rep.x == rhs->bit_rep.x && lhs->bit_rep.y < rhs->bit_rep.y);
+}
 
 /**
  * @brief Operator overload for greater-than-or-equal-to comparison between
@@ -215,7 +205,9 @@ int core_lt(const struct core *lhs, const struct core *rhs);
  * @param rhs The right-hand side `core` object.
  * @return 1 if the left-hand object is greater than or equal, 0 otherwise.
  */
-int core_geq(const struct core *lhs, const struct core *rhs);
+static inline int core_geq(const struct core *lhs, const struct core *rhs) {
+    return lhs->bit_rep.x > rhs->bit_rep.x || (lhs->bit_rep.x == rhs->bit_rep.x && lhs->bit_rep.y >= rhs->bit_rep.y);
+}
 
 /**
  * @brief Operator overload for smaller-than-or-equal-to comparison between
@@ -225,7 +217,248 @@ int core_geq(const struct core *lhs, const struct core *rhs);
  * @param rhs The right-hand side `core` object.
  * @return 1 if the left-hand object is smaller than or equal, 0 otherwise.
  */
-int core_leq(const struct core *lhs, const struct core *rhs);
+static inline int core_leq(const struct core *lhs, const struct core *rhs) {
+    return lhs->bit_rep.x < rhs->bit_rep.x || (lhs->bit_rep.x == rhs->bit_rep.x && lhs->bit_rep.y <= rhs->bit_rep.y);
+}
+
+/**
+ * @brief Return the minimum of two ubit_size values.
+ *
+ * @param a First value.
+ * @param b Second value.
+ * @return The smaller of a and b.
+ */
+static inline ubit_size umin(ubit_size a, ubit_size b) { 
+    return a < b ? a : b; 
+}
+
+/**
+ * @brief Compute the bit-length of a 128-bit unsigned integer.
+ *
+ * Bit-length is defined as the position of the most significant set bit
+ * (1-based). Returns 0 if x == 0.
+ *
+ * Uses __builtin_clzll for efficient leading-zero counting.
+ *
+ * @param x Input 128-bit unsigned integer.
+ * @return Number of significant bits required to represent x.
+ */
+static inline ubit_size bitlen_u128(uint128_t x) {
+    return x.x ? 
+    ((ubit_size)(64u - (ubit_size)__builtin_clzll(x.x)) + 64) :
+    ( x.y ? (ubit_size)(64u - (ubit_size)__builtin_clzll(x.y)) : 0u);
+}
+
+/**
+ * @brief Compute the bit-length of x with a minimum result of 2.
+ *
+ * Ensures the returned bit-length is at least 2, even if x has fewer
+ * significant bits (or is zero).
+ *
+ * @param x Input 128-bit unsigned integer.
+ * @return max(bitlen_u128(x), 2).
+ */
+static inline ubit_size bitlen_min2_128(uint128_t x) {
+    ubit_size bl = bitlen_u128(x);
+    return bl < 2u ? 2u : bl;
+}
+
+/**
+ * @brief Extract a 2-bit symbol from the low 6 bits of a packed value.
+ *
+ * The low 6 bits are interpreted as three 2-bit slots:
+ *   k = 0 → rightmost 2 bits
+ *   k = 1 → middle 2 bits
+ *   k = 2 → leftmost 2 bits
+ *
+ * @param rep Packed representation.
+ * @param k   Slot index (0–2).
+ * @return The 2-bit symbol at slot k.
+ */
+static inline uint128_t sym2_128(uint128_t rep, unsigned k) {
+    return k ? (uint128_t){0, (rep.y >> k) & 3ull} : (uint128_t){0, rep.y & 3ull};
+}
+
+/**
+ * @brief Extract the middle repetition count stored above the low 6 bits.
+ *
+ * Bits 0–5 are reserved for 2-bit symbols. Bits above 6 contain the
+ * repetition count. The most significant bit is masked off before shifting.
+ *
+ * @param rep Packed representation.
+ * @return Middle repetition count.
+ */
+static inline uint64_t mid_count_128(uint128_t rep) {
+    return rep.y >> 6;
+}
+
+/**
+ * @brief Emit an encoded index-bit value based on symbol comparison.
+ *
+ * Computes:
+ *   result = i + selected_bit or 2 + i + selected_bit, depending on 
+ *  from where the bit is selected
+ *
+ * If the least significant bits of a2 and b2 differ, select (b2 & 1).
+ * Otherwise, select ((b2 >> 1) & 1).
+ *
+ * @param a2 First 2-bit symbol.
+ * @param b2 Second 2-bit symbol.
+ * @param i  Base index multiplier.
+ * @return Encoded value 2 + i plus chosen bit from b2.
+ */
+static inline uint128_t emit_idx_bit_128(uint128_t a2, uint128_t b2, uint64_t i) {
+    if ((a2.y & 1) != (b2.y & 1)) {
+        return (uint128_t){0, i + (b2.y & 1)};
+    }
+    return (uint128_t){0, 2 + i + ((b2.y >> 1) & 1)};
+}
+
+/**
+ * @brief Perform level-1 compression of two adjacent cores.
+ *
+ * Implements the 3-symbol + middle-count encoding scheme.
+ * The caller guarantees that both `left` and `right` are already
+ * level-1 encoded.
+ *
+ * The function compares corresponding components of the packed
+ * representations in the following priority order:
+ *
+ *   1. Rightmost 2-bit symbol (L3 vs R3)
+ *   2. Leftmost 2-bit symbol (L2 vs R2)
+ *   3. Middle repetition count (Lm vs Rm)
+ *      - If counts differ, performs a boundary comparison:
+ *          • If Lm < Rm: compare L1 with R2
+ *          • Otherwise:  compare L2 with R1
+ *        The emitted index depends on the smaller count.
+ *   4. Final 2-bit symbol (L1 vs R1)
+ *   5. If all components match, emit a “same” encoding.
+ *
+ * In each mismatch case, the emitted value is:
+ *
+ *     out = 2 * index + selected_bit
+ *
+ * where the selected bit is derived from the compared 2-bit symbols.
+ *
+ * Side effects:
+ *   - Overwrites `right->bit_rep` with the compressed result.
+ *   - Updates `right->bit_size` to bitlen_min2(out).
+ *   - Propagates `left->start` into `right->start`.
+ *
+ * @param left   Pointer to left core (read-only, level-1 encoded).
+ * @param right  Pointer to right core (level-1 encoded, updated in place).
+ */
+static inline void core_compress_level1(const struct core *left, struct core *right) {
+    uint128_t L = left->bit_rep;
+    uint128_t R = right->bit_rep;
+
+    uint128_t L3 = sym2_128(L, 0), L2 = sym2_128(L, 2), L1 = sym2_128(L, 4);
+    uint128_t R3 = sym2_128(R, 0), R2 = sym2_128(R, 2), R1 = sym2_128(R, 4);
+
+    uint64_t Lm = mid_count_128(L);
+    uint64_t Rm = mid_count_128(R);
+
+    uint128_t out;
+
+    if (L3.y != R3.y) {
+        // base = 0 (2*i with i=0)
+        out = emit_idx_bit_128(L3, R3, 0);
+        right->bit_rep = out;
+        right->bit_size = 2;        
+    }
+    else if (L2.y != R2.y) {
+        // Your original used base=4/6 -> i=2 (since 2*i = 4)
+        out = emit_idx_bit_128(L2, R2, 4);
+        right->bit_rep = out;
+        right->bit_size = bitlen_min2_128(out);
+    }
+    else if (Lm != Rm) {
+        // Preserve your “compare across boundary depending on which count is smaller”
+        if (Lm < Rm) {
+            // compare left L1 with right R2; index = Lm + 1
+            out = emit_idx_bit_128(L1, R2, 4 * Lm + 4);
+        } else {
+            // compare left L2 with right R1; index = Rm + 1
+            out = emit_idx_bit_128(L2, R1, 4 * Rm + 4);
+        }
+        right->bit_rep = out;
+        right->bit_size = bitlen_min2_128(out);
+    }
+    else if (L1.y != R1.y) {
+        // left mismatch: index = Lm + 1
+        out = emit_idx_bit_128(L1, R1, 4 * Lm + 4);
+        right->bit_rep = out;
+        right->bit_size = bitlen_min2_128(out);
+    }
+    else {
+        // same
+        out = (uint128_t){0, 2ull * (uint64_t)right->bit_size};
+        right->bit_rep = out;
+        right->bit_size = bitlen_min2_128(out);
+    }
+
+    right->start = left->start;
+}
+
+
+/**
+ * @brief Perform upper-level compression via bounded first-difference encoding.
+ *
+ * The caller guarantees that both `left` and `right` are already
+ * upper-level encoded.
+ *
+ * The algorithm:
+ *
+ *   1. Compute a comparison bound:
+ *        bound = min(left->bit_size, right->bit_size, 64).
+ *
+ *   2. If the bit representations are identical:
+ *        idx = bound.
+ *      Otherwise:
+ *        - Compute x = left->bit_rep ^ right->bit_rep.
+ *        - Find the least significant differing bit:
+ *              idx = ctz(x).
+ *        - Clamp idx to `bound`.
+ *
+ *   3. Emit:
+ *        out = 2 * idx + bit_at_idx(right)
+ *
+ *      where bit_at_idx(right) is the bit of right->bit_rep at position idx.
+ *
+ * Side effects:
+ *   - Overwrites `right->bit_rep` with the compressed result.
+ *   - Updates `right->bit_size` to bitlen_min2(out).
+ *   - Propagates `left->start` into `right->start`.
+ *
+ * This encoding effectively captures the first differing bit
+ * (from the least significant side), bounded by the smaller size.
+ *
+ * @param left   Pointer to left core (read-only, upper-level encoded).
+ * @param right  Pointer to right core (upper-level encoded, updated in place).
+ */
+static inline void core_compress_upper(const struct core *left, struct core *right) {
+    ubit_size bound = umin(right->bit_size, umin(left->bit_size, 127u));
+
+    ubit_size idx;
+    if (left->bit_rep.x == right->bit_rep.x && left->bit_rep.y == right->bit_rep.y) {
+        idx = bound;
+    } else {
+        if (left->bit_rep.y == right->bit_rep.y) {
+            uint64_t x = left->bit_rep.x ^ right->bit_rep.x;   // nonzero here
+            idx = (ubit_size)__builtin_ctzll(x) + 63;
+            idx = umin(idx, bound);
+        } else {
+            uint64_t x = left->bit_rep.y ^ right->bit_rep.y;   // nonzero here
+            idx = (ubit_size)__builtin_ctzll(x);
+            idx = umin(idx, bound);
+        }
+    }
+
+    uint128_t out = (uint128_t){0, 2ull * (uint64_t)idx + (( idx > 63 ? right->bit_rep.x >> (idx - 63) : right->bit_rep.y >> idx) & 1ull)};
+    right->bit_rep = out;
+    right->bit_size = bitlen_min2_128(out);
+    right->start = left->start;
+}
 
 #ifdef __cplusplus
 }

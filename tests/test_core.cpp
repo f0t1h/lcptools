@@ -6,65 +6,76 @@
 
 void log(const std::string &message) {
 	std::cout << message << std::endl;
-};
+}
 
 void test_core_constructors() {
 
-	// test constructor with label, label_length, start, and end
-	ublock *p1 = new ublock[1];
-	p1[0] = 0b1111;
 	struct core core1;
-    init_core4(&core1, 4, p1, 2, 0, 10); // 1111 in binary
+    init_core4(&core1, 4, 0b1111, 2, 0, 10); // 1111 in binary
 
 	assert(core1.bit_size == 4 && "Label length should be 4");
-	assert(core1.bit_rep[0] == 0b1111 && "Label should be 0b1111");
+	assert(core1.bit_rep.y == 0b1111 && "Label should be 0b1111");
 	assert(core1.label == 2 && "Core label should be 1");
 	assert(core1.start == 0 && "Start should be 0");
 	assert(core1.end == 10 && "End should be 10");
 
-    free_core(&core1);
-
 	log("...  test_core_constructors passed!");
-};
+}
 
 void test_core_compress() {
 
-	ublock *p1 = new ublock[1];
-	p1[0] = 0b101;
-	ublock *p2 = new ublock[1];
-	p2[0] = 0b111;
 	struct core core1;
-    init_core4(&core1, 3, p1, 10, 0, 3); // 101 in binary
+    init_core4(&core1, 3, 0b01110001, 10, 0, 3); // 101 in binary
 	struct core core2;
-    init_core4(&core2, 3, p2, 11, 0, 3); // 111 in binary
-    
-    core_compress(&core2, &core1);
+    init_core4(&core2, 3, 0b10100001, 11, 0, 3); // 111 in binary
+
+	core1.bit_rep.x = (1ull << 63);
+	core1.bit_rep.x = (1ull << 63);
+
+    core_compress_level1(&core2, &core1);
 
 	// expected result after compressing 101 and 111 is 10 (binary) => 2 in decimal
-	assert(core1.bit_rep[0] == 0b10 && "Compressed core's label should be 0b10");
-	assert(core1.bit_size == 2 && "Compressed core's label length should be 2");
+	assert(core1.bit_rep.y == 0b1001 && "Compressed core's label should be 0b1001");
+	assert(core1.bit_size == 4 && "Compressed core's label length should be 4");
 	assert(core1.label == 10 && "Core's label should be 10");
 
-    free_core(&core1);
-    free_core(&core2);
+	struct core core3;
+    init_core4(&core3, 3, 0b101, 10, 0, 3); // 101 in binary
+	struct core core4;
+    init_core4(&core4, 3, 0b111, 11, 0, 3); // 111 in binary
+
+    core_compress_upper(&core4, &core3);
+
+	// expected result after compressing 101 and 111 is 10 (binary) => 2 in decimal
+	assert(core3.bit_rep.y == 0b10 && "Compressed core's label should be 0b10");
+	assert(core3.bit_size == 2 && "Compressed core's label length should be 2");
+
+	struct core core5;
+    init_core4(&core5, 3, 0b11100001, 10, 0, 3); // 101 in binary
+	struct core core6;
+    init_core4(&core6, 3, 0b10110001, 11, 0, 3); // 111 in binary
+
+	core5.bit_rep.x = (1ull << 63);
+	core6.bit_rep.x = (1ull << 63);
+
+    core_compress_level1(&core6, &core5);
+
+	// expected result after compressing 101 and 111 is 10 (binary) => 2 in decimal
+	assert(core5.bit_rep.y == 0b1100 && "Compressed core's label should be 0b1110");
+	assert(core5.bit_size == 4 && "Compressed core's label length should be 4");
+
 
 	log("...  test_core_compress passed!");
-};
+}
 
 void test_core_operator_overloads() {
 
-	ublock *p1 = new ublock[1];
-	p1[0] = 0b1010;
-	ublock *p2 = new ublock[1];
-	p2[0] = 0b1010;
-	ublock *p3 = new ublock[1];
-	p3[0] = 0b101;
 	struct core core1;
-    init_core4(&core1, 4, p1, 0, 0, 0); // 1010 in binary
+    init_core4(&core1, 4, 0b1010, 0, 0, 0); // 1010 in binary
 	struct core core2;
-    init_core4(&core2, 4, p2, 1, 1, 0); // 1010 in binary
+    init_core4(&core2, 4, 0b1010, 1, 1, 0); // 1010 in binary
 	struct core core3;
-    init_core4(&core3, 3, p3, 2, 2, 0); // 101 in binary
+    init_core4(&core3, 3, 0b101, 2, 2, 0); // 101 in binary
 
 	assert(core_eq(&core1, &core2) && "core1 should be equal to core2");
 	assert(core_neq(&core1, &core3) && "core1 should not be equal to core3");
@@ -73,12 +84,8 @@ void test_core_operator_overloads() {
 	assert(core_geq(&core1, &core2) && "core1 should be greater than or equal to core2");
 	assert(core_leq(&core3, &core1) && "core3 should be less than or equal to core1");
 
-    free_core(&core1);
-    free_core(&core2);
-    free_core(&core3);
-
 	log("...  test_core_operator_overloads passed!");
-};
+}
 
 int main() {
 	log("Running test_core...");
@@ -90,4 +97,4 @@ int main() {
 	log("All tests in test_core completed successfully!");
 
 	return 0;
-};
+}

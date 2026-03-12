@@ -78,7 +78,7 @@ int process_fasta(const char *infilename, const char *outfilename, int lcp_level
     char line[1024];
 
 	// Initialize lcp encoding
-    LCP_INIT(0);
+    LCP_INIT();
 
 	while (fgets(line, sizeof(line), infile)) {
 
