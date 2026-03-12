@@ -1,7 +1,5 @@
-
-#define LCPTOOLS_IMPL
-#include "../lcptools_ho.h"
-
+#include "core.h"
+#include "lps.h"
 #include <cassert>
 #include <fstream>
 #include <iostream>
@@ -319,10 +317,10 @@ void test_lps_reverse_complement() {
 void test_lps_parallel() {
 
     std::string test_string = "GGGACCTGGTGACCCCAGCCCACGACAGCCAAGCGCCAGCTGAGCTCAGGTGTGAGGAGATCACAGTCCT";
-
+	
     struct lps lps_obj1;
     init_lps(&lps_obj1, test_string.c_str(), test_string.size());
-
+	
     struct lps lps_obj2;
     init_lps(&lps_obj2, test_string.c_str(), test_string.size());
 
@@ -333,7 +331,7 @@ void test_lps_parallel() {
 	for (int i = 0; i < lps_obj1.size; i++) {
 		assert(core_eq(&(lps_obj1.cores[i]), &(lps_obj2.cores[i])) && "Cores at level 1 should match");
 	}
-
+    
     free_lps(&lps_obj1);
     free_lps(&lps_obj2);
 
@@ -470,7 +468,7 @@ void test_lps_deepen() {
 
 	level2_cores[11] = (struct core*)malloc(sizeof(struct core));
     init_core4(level2_cores[11], 6, 0b100001, 10, 0, 0);
-    fprintf(stderr, "Expected size %zu\tFound size %zu\n", level2_cores.size(), lps_obj.size);
+
 	assert(lps_obj.size == static_cast<int>(level2_cores.size()) && "Core size at level 2 should match");
 	for (int i = 0; i < lps_obj.size; i++) {
 		assert(core_eq(&(lps_obj.cores[i]), level2_cores[i]) && "Cores at level 2 should match");
@@ -521,7 +519,7 @@ void test_lps_deepen() {
 void test_lps_consistency() {
 
     std::ifstream genome("data/test.fasta");
-
+    
     LCP_INIT();
 
     std::string sequence;
@@ -587,7 +585,7 @@ int main() {
 	test_lps_constructor();
     test_lps_reverse_complement();
     test_lps_parallel();
-    // test_lps_split_init();
+    test_lps_split_init();
     test_lps_file_io();
 	test_lps_deepen();
     test_lps_consistency();

@@ -1,5 +1,4 @@
-#define LCPTOOLS_IMPL
-#include "../lcptools_ho.h"
+#include "encoding.h"
 #include <cassert>
 #include <fstream>
 #include <iostream>

@@ -111,7 +111,7 @@ test:
 	@echo "Running tests..."
 	@for test in $(TESTS); do \
 		echo "Compiling $$test.cpp..."; \
-		g++ $(CXXFLAGS) -I$(INCLUDE_DIR) -o tests/$$test tests/$$test.cpp; \
+		g++ $(CXXFLAGS) -I$(INCLUDE_DIR) -o tests/$$test tests/$$test.cpp -L$(LIB_DIR) -l$(LIB_NAME) -Wl,-rpath,$(LIB_DIR); \
 		if [ $$? -ne 0 ]; then \
 			echo "Compilation failed for $$test.c"; \
 			exit 1; \

@@ -113,6 +113,19 @@ void init_core2(struct core *cr, const char *begin, uint64_t distance, uint64_t 
     cr->bit_size = 2 * distance;
 }
 
+static inline void append_bits(uint128_t *dst, uint128_t src, int shift) {
+    if (shift >= 128) return;
+
+    if (shift >= 64) {
+        dst->x |= src.y << (shift - 64);
+    } else {
+        dst->y |= src.y << shift;
+
+        if (shift)
+            dst->x |= src.y >> (64 - shift);
+    }
+}
+
 void init_core3(struct core *cr, struct core *begin, uint64_t distance) {
     cr->start = begin->start;
     cr->end = (begin+distance-1)->end;
@@ -124,9 +137,10 @@ void init_core3(struct core *cr, struct core *begin, uint64_t distance) {
     }
 
     int index = 0;
-    for (struct core *it = begin+distance-1; begin <= it && index + it->bit_size <= 64; it--) {
-        cr->bit_rep.y |= (it->bit_rep.y << index);
+    for (struct core *it = begin+distance-1; begin <= it; it--) {
+        append_bits(&cr->bit_rep, it->bit_rep, index);
         index += it->bit_size;
+        if (index >= 127) break;
     }
 
     cr->bit_rep.x = 0x7FFFFFFFFFFFFFFF & cr->bit_rep.x;
