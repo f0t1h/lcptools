@@ -53,6 +53,7 @@ extern "C" {
 typedef uint32_t ubit_size;
 typedef uint32_t ulabel;
 
+#define BITREP128bit
 typedef struct {
     uint64_t x;
     uint64_t y;
