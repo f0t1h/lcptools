@@ -1364,6 +1364,7 @@ void init_core4(struct core *cr, ubit_size bit_size, uint64_t bit_rep, ulabel la
 }
 
 void core_compress(const struct core *left_core, struct core *right_core) {
+#ifdef LCP_LEVEL1_BRANCH
     if (left_core->bit_rep & 0x8000000000000000) { // if compressing 1-level cores
         uint64_t left_core_3 = (left_core->bit_rep) & 3;
         uint64_t left_core_2 = (left_core->bit_rep >> 2) & 3;
@@ -1422,7 +1423,9 @@ void core_compress(const struct core *left_core, struct core *right_core) {
             right_core->bit_rep = 2 * right_core->bit_size;
             right_core->bit_size = (64 - __builtin_clzll(right_core->bit_rep));
         }
-    } else { // if compressing upper level (>1) cores
+    } else
+#endif /* LCP_LEVEL1_BRANCH */
+    { // generic path: first differing bit from the LSB, bounded by bit_size
         ubit_size first_differing_index = 64;
         if (left_core->bit_rep != right_core->bit_rep) {
             first_differing_index = __builtin_ctzll(left_core->bit_rep ^ right_core->bit_rep); // trailing zero count (0-index)
