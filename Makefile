@@ -8,7 +8,7 @@ AR = ar
 ARFLAGS = rcs
 
 # variables
-SRC = encoding.c core.c lps.c
+SRC = encoding.c core.c lps.c lps_soa.c
 HDR = $(SRC:.c=.h)
 OBJ_STATIC = $(SRC:.c=_s.o)
 OBJ_DYNAMIC = $(SRC:.c=_d.o)
